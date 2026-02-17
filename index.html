@@ -164,7 +164,6 @@
                     <div class="reese-avatar-mini" id="reese-trigger-avatar-t"></div>
                     <div class="reese-placeholder">ماذا يدور في ذهنك اليوم؟</div>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <i class="fas fa-image" style="color:#555; font-size:1rem;"></i>
                         <i class="fas fa-paper-plane" style="color:var(--accent-primary); font-size:1rem;"></i>
                     </div>
                 </div>
@@ -323,10 +322,10 @@
                     <i class="fas fa-search search-icon"></i>
                     <input type="text" class="google-bar" id="s-search" placeholder="ابحث عن اختبار...">
                 </div>
-                <div class="create-exam-cta" style="margin-bottom: 20px; cursor: default; background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(16, 185, 129, 0.05)); border-color: rgba(255,255,255,0.1);">
-                    <i class="fas fa-brain cta-bg-icon"></i>
+                <div class="create-exam-cta student-stats-cta" onclick="openStudentAnalytics()">
+                    <i class="fas fa-chart-line cta-bg-icon"></i>
                     <div class="cta-content">
-                        <div class="cta-icon-wrapper" style="background: var(--accent-gold); box-shadow: 0 0 15px rgba(255, 215, 0, 0.4);"><i class="fas fa-lightbulb"></i></div>
+                        <div class="cta-icon-wrapper"><i class="fas fa-chart-pie"></i></div>
                         <div style="text-align: right; flex: 1;">
                             <div style="display:flex; align-items:center; gap:3px;">
                                 <h3 id="student-type-text" class="typewriter-text"></h3><span class="typewriter-cursor"></span>
@@ -338,6 +337,17 @@
                     </div>
                 </div>
                 <div id="s-exams-list"></div>
+            </section>
+
+            <section id="s-analytics" class="app-section hidden">
+                <div class="mobile-spacer"></div>
+                <div class="back-btn-header" onclick="switchTab('s-exams')"><i class="fas fa-arrow-right"></i> رجوع</div>
+                <h2 style="margin-bottom: 20px;">تحليل المستوى الدراسي</h2>
+                <div id="student-analytics-content">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <i class="fas fa-spinner fa-spin"></i> جاري التحليل...
+                    </div>
+                </div>
             </section>
 
             <section id="s-reese" class="app-section hidden full-width-section">
@@ -352,7 +362,6 @@
                     <div class="reese-avatar-mini" id="reese-trigger-avatar-s"></div>
                     <div class="reese-placeholder">شارك أفكارك مع الجميع...</div>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <i class="fas fa-image" style="color:#555; font-size:1rem;"></i>
                         <i class="fas fa-paper-plane" style="color:var(--accent-primary); font-size:1rem;"></i>
                     </div>
                 </div>
