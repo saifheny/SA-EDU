@@ -1,3 +1,4 @@
+
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
@@ -28,14 +29,10 @@ let reeseImages = [];
 let myUid = null;
 let activeChatRoomId = null;
 
-// ==========================================
-// [FIX #1 & #3] ثوابت نظام التوجيه والتنقل
-// ==========================================
 const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai'];
 const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai'];
-let _suppressHistoryPush = false; // يمنع التكرار عند استخدام popstate
+let _suppressHistoryPush = false;
 
-// [FIX #3] متغيرات تتبع السحب
 let _swipeStartX = 0;
 let _swipeStartY = 0;
 let _swipeStartTarget = null;
@@ -51,9 +48,6 @@ window.addEventListener("scroll", function() {
     lastScrollTop = st <= 0 ? 0 : st;
 }, false);
 
-// ==========================================
-// [FIX #2] زر الرجوع - popstate listener
-// ==========================================
 window.addEventListener('popstate', (e) => {
     if (!currentUser) return;
     const hash = window.location.hash.replace('#', '');
@@ -64,7 +58,6 @@ window.addEventListener('popstate', (e) => {
     const idx = tabs.indexOf(hash);
     
     if (idx !== -1) {
-        // تجنب إضافة state جديد عند الضغط على زر الرجوع
         _suppressHistoryPush = true;
         const navBtns = document.querySelectorAll(`#${portal} .nav-btn`);
         switchTab(hash, navBtns[idx]);
@@ -72,9 +65,6 @@ window.addEventListener('popstate', (e) => {
     }
 });
 
-// ==========================================
-// [FIX #6] إصلاح الكيبورد على الموبايل
-// ==========================================
 function initKeyboardFix() {
     if (!window.visualViewport) return;
     
@@ -85,20 +75,17 @@ function initKeyboardFix() {
         const vvTop = window.visualViewport.offsetTop;
         const diff = window.innerHeight - vvHeight - vvTop;
         
-        // تطبيق على Gemini input wrapper
         const geminiWrapper = document.querySelector('.gemini-input-wrapper');
         if (geminiWrapper) {
             geminiWrapper.style.bottom = Math.max(0, diff) + 'px';
         }
         
-        // تطبيق على chat-input-area (داخل chat-window)
         const chatInputAreas = document.querySelectorAll('.chat-input-area');
         chatInputAreas.forEach(area => {
             area.style.bottom = Math.max(0, diff) + 'px';
-            area.style.position = diff > 50 ? 'sticky' : '';
+            area.style.position = diff > 50 ? 'sticky' : 'absolute';
         });
         
-        // scroll العنصر النشط ليظهر فوق الكيبورد
         const activeEl = document.activeElement;
         if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) {
             setTimeout(() => {
@@ -110,9 +97,6 @@ function initKeyboardFix() {
     });
 }
 
-// ==========================================
-// [FIX #3] تهيئة نظام السحب بين الأقسام
-// ==========================================
 function initSwipeNavigation(portalId) {
     const portal = document.getElementById(portalId);
     if (!portal) return;
@@ -124,7 +108,6 @@ function initSwipeNavigation(portalId) {
     }, { passive: true });
     
     portal.addEventListener('touchend', (e) => {
-        // تجاهل السحب إذا بدأ من داخل المحادثة أو النوافذ المنبثقة
         if (_swipeStartTarget && (
             _swipeStartTarget.closest('.chat-window') ||
             _swipeStartTarget.closest('.chat-sidebar') ||
@@ -137,7 +120,6 @@ function initSwipeNavigation(portalId) {
         const dx = e.changedTouches[0].clientX - _swipeStartX;
         const dy = e.changedTouches[0].clientY - _swipeStartY;
         
-        // التحقق: سحب أفقي > 70px وأكبر من 1.5× الرأسي
         if (Math.abs(dx) < 70 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
         
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
@@ -145,19 +127,16 @@ function initSwipeNavigation(portalId) {
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
         
-        // RTL: سحب لليمين (dx>0) = القسم السابق، سحب لليسار (dx<0) = القسم التالي
         const newIdx = dx > 0 ? idx + 1 : idx - 1;
         
         if (newIdx >= 0 && newIdx < tabs.length) {
             const navBtns = document.querySelectorAll(`#${portalId} .nav-btn`);
-            // تأثير الانتقال حسب اتجاه السحب
             const direction = dx > 0 ? 'left' : 'right';
             switchTabWithDirection(tabs[newIdx], navBtns[newIdx], direction);
         }
     }, { passive: true });
 }
 
-// تبديل التبويب مع تأثير اتجاهي
 function switchTabWithDirection(tabId, btn, direction) {
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
     const section = document.getElementById(tabId);
@@ -165,16 +144,12 @@ function switchTabWithDirection(tabId, btn, direction) {
     
     switchTab(tabId, btn);
     
-    // إضافة تأثير الانتقال
     section.classList.add(direction === 'right' ? 'section-enter' : 'section-enter-left');
     setTimeout(() => {
         section.classList.remove('section-enter', 'section-enter-left');
     }, 300);
 }
 
-// ==========================================
-// [FIX #1] تحديث مؤشرات التبويب (Dots)
-// ==========================================
 function updateTabDots(activeTabId) {
     const dotsContainer = document.getElementById('tab-dots');
     if (!dotsContainer) return;
@@ -216,14 +191,9 @@ window.addEventListener('click', function(e) {
     }
 });
 
-// ==========================================
-// نظام الأصوات الذكي - صوت فقط في الدردشة
-// + Toast notifications بديلاً عن الأصوات
-// ==========================================
 function playSound(type) {
-    // أصوات الدردشة فقط: sent و recv
     const chatOnlySounds = ['sent', 'recv'];
-    if (!chatOnlySounds.includes(type)) return; // تجاهل كل الأصوات الأخرى
+    if (!chatOnlySounds.includes(type)) return;
     
     const soundMap = {
         'sent': 'snd-sent',
@@ -239,7 +209,6 @@ function playSound(type) {
     }
 }
 
-// Toast notification system - بديل جميل عن الأصوات
 function showToast(title, sub = '', type = 'msg', duration = 3000) {
     let container = document.getElementById('sa-toast-container');
     if (!container) {
@@ -326,7 +295,6 @@ function getEmptyStateHTML(type) {
 }
 
 window.saAlert = (msg, type = 'info', title = null) => {
-    // رسائل بسيطة → toast سريع
     const simpleTypes = ['success', 'info'];
     if (simpleTypes.includes(type) && !title) {
         const toastType = type === 'success' ? 'success' : 'info';
@@ -334,7 +302,6 @@ window.saAlert = (msg, type = 'info', title = null) => {
         return;
     }
     
-    // رسائل الخطأ والرسائل المهمة → alert modal كامل
     const modal = document.getElementById('sa-custom-alert');
     const iconDiv = document.getElementById('sa-alert-icon');
     const titleDiv = document.getElementById('sa-alert-title');
@@ -500,23 +467,18 @@ function loginSuccess(name, icon, uid) {
     if (selectedRole === 'teacher') {
         document.getElementById('teacher-app').classList.remove('hidden');
         initTeacherApp();
-        // [FIX #3] تهيئة السحب بعد ظهور التطبيق
         setTimeout(() => initSwipeNavigation('teacher-app'), 500);
     } else {
         document.getElementById('student-app').classList.remove('hidden');
         loadStudentExams(); loadStudentGrades(); initStudentReese(); 
-        // [FIX #3] تهيئة السحب بعد ظهور التطبيق
         setTimeout(() => initSwipeNavigation('student-app'), 500);
     }
     initDardasha();
     
-    // [FIX #6] تهيئة إصلاح الكيبورد
     initKeyboardFix();
     
-    // [FIX #1] استعادة القسم من URL عند التحميل
     handleDeepLinksAndRouting();
     
-    // [FIX #3] إظهار مؤشرات التبويب
     showTabDots();
     const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
     updateTabDots(window.location.hash.replace('#', '') || defaultTab);
@@ -560,18 +522,15 @@ function handleDeepLinks() {
     }
 }
 
-// [FIX #1] دالة موحدة للتعامل مع Deep Links وURL Routing
 function handleDeepLinksAndRouting() {
     const params = new URLSearchParams(window.location.search);
     const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat');
     
     if (hasDeepLink) {
-        // إذا في deep link، نفذها أولاً
         handleDeepLinks();
         return;
     }
     
-    // [FIX #1] فحص الـ hash للعودة للقسم المحفوظ
     const hash = window.location.hash.replace('#', '');
     const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
@@ -583,7 +542,6 @@ function handleDeepLinksAndRouting() {
         switchTab(hash, navBtns[idx]);
         _suppressHistoryPush = false;
     } else {
-        // القسم الافتراضي
         const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
         window.history.replaceState({ tab: defaultTab }, '', '#' + defaultTab);
     }
@@ -692,7 +650,6 @@ window.switchTab = (tabId, btn) => {
         btn.classList.add('active'); 
     }
     
-    // [FIX #1] تحديث URL بـ hash لحفظ القسم الحالي
     if (!_suppressHistoryPush) {
         const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
         if (allTabs.includes(tabId)) {
@@ -700,13 +657,12 @@ window.switchTab = (tabId, btn) => {
         }
     }
     
-    // [FIX #1 & #3] تحديث مؤشرات التبويب
     updateTabDots(tabId);
     
     if(tabId === 's-grades') loadStudentGrades();
     if(tabId === 's-exams') {
         loadStudentExams();
-        startTypewriter("student-type-text", "الاختبارات المتاحة لتطويرك");
+        startTypewriter("student-type-text", "تحليل المستوى الدراسي");
     }
     if(tabId === 't-library') {
         loadTeacherTests();
@@ -719,7 +675,6 @@ window.switchTab = (tabId, btn) => {
     if(tabId === 't-ai' && !currentChatId) startNewChat('t');
     if(tabId === 's-ai' && !currentChatId) startNewChat('s');
     
-    // [FIX #6] إضافة keyboard fix للـ AI input بعد التبويب
     setTimeout(() => {
         const aiInput = document.getElementById(`${tabId.charAt(0)}-ai-input`);
         if (aiInput) {
@@ -896,7 +851,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
     `;
 
     const msgContainer = document.getElementById(`chat-msgs-${chatId}`);
-    let isFirstLoad = true; // تجنب إشعار عند التحميل الأول
+    let isFirstLoad = true;
     
     onValue(ref(db, `chats/${chatId}`), (snap) => {
         const previousCount = msgContainer.children.length;
@@ -922,7 +877,6 @@ window.openChatRoom = (chatId, name, icon, uid) => {
             });
             msgContainer.scrollTop = msgContainer.scrollHeight;
             
-            // إشعار صوتي + toast فقط للرسائل الجديدة (ليس عند التحميل الأول)
             if (!isFirstLoad && msgArr.length > previousCount) {
                 const lastMsg = msgArr[msgArr.length - 1];
                 if (lastMsg && lastMsg.sender !== myUid) {
@@ -942,14 +896,11 @@ window.closeChatWindow = (prefix) => {
     activeChatRoomId = null;
 };
 
-// [FIX #6] إصلاح مشكلة الـ input مع الكيبورد في الموبايل
 window.handleChatInputFocus = (input) => {
     if (window.innerWidth > 768) return;
     
-    // انتظر قليلاً ريثما يظهر الكيبورد ثم scroll للـ input
     setTimeout(() => {
         input.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        // scroll منطقة الرسائل للأسفل
         const chatId = input.id.replace('chat-input-', '');
         const msgArea = document.getElementById(`chat-msgs-${chatId}`);
         if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
@@ -1037,12 +988,10 @@ window.openReeseCompose = () => {
     document.getElementById('compose-name').innerText = currentUser;
     reeseImages = []; renderReeseMediaPreview();
     
-    // تحميل الاقتراحات تلقائياً - دائماً ظاهرة
     const container = document.getElementById('ai-reese-suggestions');
     container.innerHTML = '';
     container.classList.remove('hidden');
     
-    // اقتراحات فورية placeholder
     const placeholders = ['✨ جاري التوليد...', '🧠 ...', '💡 ...'];
     placeholders.forEach(ph => {
         const chip = document.createElement('div');
@@ -1053,7 +1002,6 @@ window.openReeseCompose = () => {
         container.appendChild(chip);
     });
     
-    // تحميل اقتراحات حقيقية في الخلفية
     loadReeseAiSuggestionsAuto();
 };
 
@@ -1236,7 +1184,6 @@ window.shareReese = (id) => {
 };
 
 window.generateAiReese = async () => {
-    // إعادة تحميل الاقتراحات
     const container = document.getElementById('ai-reese-suggestions');
     container.innerHTML = '<div class="suggestion-chip" style="opacity:0.5; pointer-events:none;"><i class="fas fa-circle-notch fa-spin"></i> جاري التوليد...</div>';
     await loadReeseAiSuggestionsAuto();
@@ -1249,7 +1196,6 @@ window.startNewChat = (prefix) => {
     currentChatId = generateChatId(); currentChatMessages = []; isIncognito = false;
     document.getElementById(`${prefix}-ai-msgs`).innerHTML = ''; 
     document.getElementById(`${prefix}-incognito-btn`).classList.remove('active');
-    // إعادة زرار الميكروفون
     window.toggleAiSendMic(prefix, '');
     renderAiWelcome(prefix); toggleHistory(false);
 };
@@ -1356,7 +1302,6 @@ window.loadLocalChat = (id) => {
         document.getElementById(`${prefix}-ai-msgs`).innerHTML = '';
         currentChatMessages.forEach(msg => { renderMessageUI(prefix, msg.role, msg.content, msg.image); });
         toggleHistory(false);
-        // إعادة تهيئة أزرار الميكروفون/الإرسال
         window.toggleAiSendMic(prefix, document.getElementById(`${prefix}-ai-input`)?.value || '');
     }
 };
@@ -1893,9 +1838,6 @@ window.clearChatImg = (prefix) => {
     document.getElementById(`${prefix}-chat-preview`).style.display = 'none';
 };
 
-// ==========================================
-// تبديل بين زرار الصوت والإرسال في AI chat
-// ==========================================
 window.toggleAiSendMic = (role, value) => {
     const micBtn = document.getElementById(role + '-mic-btn');
     const sendBtn = document.getElementById(role + '-send-btn');
@@ -1909,9 +1851,6 @@ window.toggleAiSendMic = (role, value) => {
     }
 };
 
-// ==========================================
-// Voice Input - إدخال صوتي
-// ==========================================
 let _isRecording = false;
 window._speechRecog = null;
 
@@ -2021,7 +1960,6 @@ window.sendAiMsg = async (prefix) => {
     currentChatMessages.push({ role: 'user', content: txt, image: imgB64 });
     renderMessageUI(prefix, 'user', txt, imgB64);
     input.value = '';
-    // إعادة زرار الميكروفون بعد الإرسال
     window.toggleAiSendMic(prefix, '');
     saveChatToLocal();
     
@@ -2121,6 +2059,106 @@ window.generateAiQuestions = async () => {
         toggleConstructionOverlay(false);
         saAlert("فشل البناء. حاول مرة أخرى.", "error"); 
     }
+};
+
+window.openStudentAnalytics = async () => {
+    playSound('click');
+    switchTab('s-analytics');
+    const content = document.getElementById('student-analytics-content');
+    content.innerHTML = '<div style="text-align: center; margin-bottom: 20px;"><i class="fas fa-spinner fa-spin"></i> جاري التحليل...</div>';
+
+    const testSnap = await get(ref(db, 'tests'));
+    const allTests = testSnap.val() || {};
+    let totalScore = 0;
+    let totalPossible = 0;
+    let examCount = 0;
+    let grades = {};
+    let subjectStats = {};
+
+    for (const [testId, testData] of Object.entries(allTests)) {
+        const resSnap = await get(ref(db, `results/${testId}/${currentUser}`));
+        if (resSnap.exists()) {
+            const res = resSnap.val();
+            examCount++;
+            totalScore += res.score;
+            totalPossible += res.total;
+            
+            if (testData.grade) {
+                grades[testData.grade] = (grades[testData.grade] || 0) + 1;
+            }
+
+            let subject = "عام";
+            if (testData.title) {
+                if (testData.title.includes("فيزياء")) subject = "فيزياء";
+                else if (testData.title.includes("كيمياء")) subject = "كيمياء";
+                else if (testData.title.includes("أحياء")) subject = "أحياء";
+                else if (testData.title.includes("رياضيات")) subject = "رياضيات";
+                else if (testData.title.includes("عربي")) subject = "لغة عربية";
+                else if (testData.title.includes("نجليزي")) subject = "لغة إنجليزية";
+            }
+            
+            if (!subjectStats[subject]) subjectStats[subject] = { score: 0, total: 0 };
+            subjectStats[subject].score += res.score;
+            subjectStats[subject].total += res.total;
+        }
+    }
+
+    if (examCount === 0) {
+        content.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">لم تقم بأي اختبارات بعد لتحليل مستواك.</div>';
+        return;
+    }
+
+    let likelyGrade = "غير محدد";
+    let maxCount = 0;
+    for (const [g, c] of Object.entries(grades)) {
+        if (c > maxCount) {
+            maxCount = c;
+            likelyGrade = getGradeLabel(g);
+        }
+    }
+
+    const overallPct = Math.round((totalScore / totalPossible) * 100);
+    let level = "مبتدئ";
+    let color = "#aaa";
+    if (overallPct >= 90) { level = "عبقري"; color = "var(--accent-gold)"; }
+    else if (overallPct >= 75) { level = "ممتاز"; color = "var(--success)"; }
+    else if (overallPct >= 60) { level = "جيد جداً"; color = "var(--accent-primary)"; }
+    else if (overallPct >= 50) { level = "جيد"; color = "var(--warning)"; }
+    else { level = "يحتاج تحسين"; color = "var(--danger)"; }
+
+    let subjectHtml = '';
+    for (const [subj, data] of Object.entries(subjectStats)) {
+        const pct = Math.round((data.score / data.total) * 100);
+        subjectHtml += `
+            <div style="margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:5px;">
+                    <span>${subj}</span>
+                    <span>${pct}%</span>
+                </div>
+                <div class="stat-bar"><div class="stat-fill" style="width:${pct}%"></div></div>
+            </div>
+        `;
+    }
+
+    content.innerHTML = `
+        <div class="analytics-grid">
+            <div class="analytics-card">
+                <h4>الصف الدراسي</h4>
+                <div class="value">${likelyGrade}</div>
+            </div>
+            <div class="analytics-card">
+                <h4>مستوى الذكاء</h4>
+                <div class="value" style="color:${color}">${level}</div>
+            </div>
+        </div>
+        <div style="background:rgba(255,255,255,0.05); padding:15px; border-radius:15px; margin-bottom:20px;">
+            <h4 style="margin-top:0; color:#ccc;">أداء المواد</h4>
+            ${subjectHtml}
+        </div>
+        <div style="text-align:center; font-size:0.8rem; color:#666;">
+            بناءً على ${examCount} اختبار تم إجراؤه
+        </div>
+    `;
 };
 
 const savedUser = localStorage.getItem('sa_user'); const savedRole = localStorage.getItem('sa_role'); const savedIcon = localStorage.getItem('sa_icon'); const savedUid = localStorage.getItem('sa_uid');
