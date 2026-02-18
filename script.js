@@ -485,47 +485,121 @@ function loginSuccess(name, icon, uid) {
     updateTabDots(window.location.hash.replace('#', '') || defaultTab);
 }
 
-function handleDeepLinks() {
-    const params = new URLSearchParams(window.location.search);
-    const shareId = params.get('shareId');
-    const examId = params.get('examId');
-    const postId = params.get('postId');
-    const chatTarget = params.get('chat');
+function updateOGMeta(title, description, imageUrl) {
+    const baseUrl = window.location.href.split('?')[0];
+    const fullUrl = window.location.href;
 
-    if(shareId) { 
-        const prefix = selectedRole === 'teacher' ? 't' : 's';
-        switchTab(`${prefix}-ai`); loadSharedChat(shareId, prefix); 
+    const set = (selector, attr, val) => {
+        const el = document.querySelector(selector);
+        if (el) el.setAttribute(attr, val);
+    };
+
+    document.title = title + ' | SA EDU';
+    set('meta[property="og:title"]', 'content', title);
+    set('meta[property="og:description"]', 'content', description);
+    set('meta[property="og:url"]', 'content', fullUrl);
+    set('meta[name="twitter:title"]', 'content', title);
+    set('meta[name="twitter:description"]', 'content', description);
+    if (imageUrl) {
+        set('meta[property="og:image"]', 'content', imageUrl);
+        set('meta[name="twitter:image"]', 'content', imageUrl);
     }
-    
-    if(examId) {
-        if(selectedRole === 'student') {
+    set('link[rel="canonical"]', 'href', fullUrl);
+}
+
+async function handleDeepLinks() {
+    const params = new URLSearchParams(window.location.search);
+    const shareId  = params.get('shareId');
+    const examId   = params.get('examId');
+    const postId   = params.get('postId');
+    const chatUid  = params.get('chat');
+    const chatRoom = params.get('room');
+
+    if (shareId) {
+        const prefix = selectedRole === 'teacher' ? 't' : 's';
+        updateOGMeta('محادثة AI مشاركة', 'شاهد هذه المحادثة مع الذكاء الاصطناعي على SA EDU');
+        switchTab(`${prefix}-ai`);
+        loadSharedChat(shareId, prefix);
+    }
+
+    if (examId) {
+        const snap = await get(ref(db, `tests/${examId}`));
+        if (snap.exists()) {
+            const d = snap.val();
+            const subjectLabel = d.subject || 'اختبار';
+            updateOGMeta(
+                `${subjectLabel}: ${d.title}`,
+                `اختبار ${subjectLabel} • ${d.questions?.length || 0} سؤال • ${d.duration} دقيقة • أعده ${d.teacher}`,
+            );
+        }
+        if (selectedRole === 'student') {
             switchTab('s-exams');
-            checkPhoneAndStart(examId);
+            setTimeout(() => checkPhoneAndStart(examId), 400);
         } else {
-             switchTab('t-library');
-             saAlert("هذا رابط امتحان. كمعلم يمكنك تعديله من المكتبة.", "info");
+            switchTab('t-library');
+            setTimeout(() => {
+                const card = document.querySelector(`[data-exam-id="${examId}"]`);
+                if (card) { card.scrollIntoView({ behavior: 'smooth' }); card.style.border = '2px solid var(--accent-gold)'; }
+            }, 1000);
+            saAlert("هذا رابط امتحان. كمعلم يمكنك تعديله من المكتبة.", "info");
         }
     }
 
-    if(postId) {
+    if (postId) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
+        const postSnap = await get(ref(db, `reese_posts/${postId}`));
+        if (postSnap.exists()) {
+            const pd = postSnap.val();
+            updateOGMeta(
+                `منشور من ${pd.author || 'مستخدم'} على Reese`,
+                pd.text?.substring(0, 160) || 'منشور على منصة SA EDU',
+                pd.images?.[0] || pd.image || null
+            );
+        }
         switchTab(`${prefix}-reese`);
         setTimeout(() => {
-             const el = document.getElementById(`post-${postId}`);
-             if(el) { el.scrollIntoView({behavior: "smooth"}); el.style.border = "2px solid var(--accent-primary)"; }
-        }, 1500);
+            const el = document.getElementById(`post-${postId}`);
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.style.transition = 'box-shadow 0.4s';
+                el.style.boxShadow = '0 0 0 3px var(--accent-primary)';
+                setTimeout(() => { el.style.boxShadow = ''; }, 3000);
+            }
+        }, 1200);
     }
 
-    if(chatTarget && chatTarget !== myUid) {
+    if (chatRoom) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
+        const roomSnap = await get(ref(db, `chat_room_meta/${chatRoom}`));
+        if (roomSnap.exists()) {
+            const rm = roomSnap.val();
+            const otherUid = rm.members?.find(m => m !== myUid);
+            const otherName = rm.names?.[otherUid] || 'مستخدم';
+            const otherIcon = rm.icons?.[otherUid] || 'fa-user';
+            updateOGMeta(`محادثة مع ${otherName}`, `افتح المحادثة مع ${otherName} على SA EDU`);
+            switchTab(`${prefix}-dardasha`);
+            setTimeout(() => openChatRoom(chatRoom, otherName, otherIcon, otherUid), 700);
+        } else {
+            switchTab(`${prefix}-dardasha`);
+        }
+    }
+
+    if (chatUid && chatUid !== myUid) {
+        const prefix = selectedRole === 'teacher' ? 't' : 's';
+        const usnap = await get(ref(db, `users/students/${chatUid}`)).catch(() => null)
+            || await get(ref(db, `users/teachers/${chatUid}`)).catch(() => null);
+        if (usnap?.exists()) {
+            const ud = usnap.val();
+            updateOGMeta(`تواصل مع ${ud.username || 'مستخدم'}`, `ابدأ محادثة مع ${ud.username || 'مستخدم'} على SA EDU`);
+        }
         switchTab(`${prefix}-dardasha`);
-        searchUserById(chatTarget);
+        searchUserById(chatUid);
     }
 }
 
 function handleDeepLinksAndRouting() {
     const params = new URLSearchParams(window.location.search);
-    const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat');
+    const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room');
     
     if (hasDeepLink) {
         handleDeepLinks();
@@ -1193,10 +1267,32 @@ window.sendChatImage = async (input, chatId, otherUid) => {
     }
 };
 
-window.copyProfileLinkFor = (uid) => {
-     playSound('click');
-     const url = `${window.location.href.split('?')[0]}?chat=${uid}`;
-    navigator.clipboard.writeText(url).then(() => saAlert("تم نسخ رابط المستخدم!", "success"));
+window.copyProfileLinkFor = async (otherUid) => {
+    playSound('click');
+    if (!activeChatRoomId) {
+        const url = `${window.location.href.split('?')[0]}?chat=${otherUid}`;
+        navigator.clipboard.writeText(url).then(() => saAlert("تم نسخ رابط المستخدم!", "success"));
+        return;
+    }
+    const roomId = activeChatRoomId;
+    const myData = { username: currentUser };
+    const otherSnap = await get(ref(db, `users/students/${otherUid}`)).catch(() => null)
+        || await get(ref(db, `users/teachers/${otherUid}`)).catch(() => null);
+    const otherName = otherSnap?.val()?.username || 'مستخدم';
+    const otherIcon = otherSnap?.val()?.icon || 'fa-user';
+
+    await update(ref(db, `chat_room_meta/${roomId}`), {
+        members: [myUid, otherUid],
+        names: { [myUid]: currentUser, [otherUid]: otherName },
+        icons: { [myUid]: localStorage.getItem('sa_icon') || 'fa-user', [otherUid]: otherIcon }
+    });
+
+    const url = `${window.location.href.split('?')[0]}?room=${roomId}`;
+    if (navigator.share) {
+        navigator.share({ title: `محادثة مع ${otherName}`, text: `افتح محادثتنا على SA EDU`, url }).catch(() => {});
+    } else {
+        navigator.clipboard.writeText(url).then(() => saAlert("تم نسخ رابط الدردشة المباشر!", "success"));
+    }
 };
 
 window.filterChats = (prefix, term) => {
@@ -1656,10 +1752,12 @@ function loadTeacherTests() {
                 const opt = document.createElement('option'); opt.value = key; opt.innerText = val.title; resultSelect.appendChild(opt);
                 const hiddenStyle = val.isHidden ? 'opacity:0.6; border:1px dashed #666;' : '';
                 const cardWrapper = document.createElement('div'); cardWrapper.className = 'card-wrapper';
+                cardWrapper.setAttribute('data-exam-id', key);
+                const subjectBadge = val.subject ? `<span class="subject-badge">${val.subject}</span>` : '';
                 cardWrapper.innerHTML = `
                     <div class="mini-card" style="${hiddenStyle}">
                         <div class="card-header">
-                            <div><h3 class="card-title">${val.title}</h3><div class="card-meta"><span>${getGradeLabel(val.grade)}</span> • <span>${val.duration} دقيقة</span></div></div>
+                            <div><h3 class="card-title">${val.title}</h3><div class="card-meta">${subjectBadge}<span>${getGradeLabel(val.grade)}</span> • <span>${val.duration} دقيقة</span></div></div>
                             <div class="teacher-badge">نشط</div>
                         </div>
                         <div class="icon-actions">
@@ -1816,6 +1914,7 @@ window.editQuestion = (idx) => {
 
 window.resetCreateForm = () => {
     document.getElementById('new-test-name').value = ''; document.getElementById('new-test-grade').value = ''; document.getElementById('new-test-duration').value = '';
+    const subj = document.getElementById('new-test-subject'); if(subj) subj.value = '';
     document.getElementById('custom-grade-input').classList.add('hidden');
     document.getElementById('create-page-title').innerText = "اختبار جديد";
     document.getElementById('btn-save-test').innerHTML = '<i class="fas fa-save"></i> نشر الاختبار النهائي';
@@ -1836,6 +1935,8 @@ window.editTest = async (testId) => {
     else { gradeSelect.value = 'custom'; document.getElementById('custom-grade-input').classList.remove('hidden'); document.getElementById('custom-grade-input').value = data.grade; }
     currentQuestions = data.questions || []; if(!Array.isArray(currentQuestions)) currentQuestions = Object.values(currentQuestions);
     renderAddedQuestions();
+    const subjectEl = document.getElementById('new-test-subject');
+    if(subjectEl && data.subject) { subjectEl.value = data.subject; }
 };
 
 window.saveTest = async () => {
@@ -1843,8 +1944,9 @@ window.saveTest = async () => {
     const title = document.getElementById('new-test-name').value;
     let grade = document.getElementById('new-test-grade').value; if(grade === 'custom') grade = document.getElementById('custom-grade-input').value;
     const duration = document.getElementById('new-test-duration').value;
+    const subject = document.getElementById('new-test-subject').value || 'عام';
     if(!title || !grade || !duration || currentQuestions.length === 0) return saAlert("البيانات ناقصة (تأكد من إضافة سؤال واحد على الأقل)", "error");
-    const payload = { teacher: currentUser, title, grade, duration, questions: currentQuestions, timestamp: Date.now(), isHidden: false };
+    const payload = { teacher: currentUser, title, grade, duration, subject, questions: currentQuestions, timestamp: Date.now(), isHidden: false };
     if (isEditingMode && editingTestId) { await update(ref(db, `tests/${editingTestId}`), payload); saAlert("تم تعديل الاختبار بنجاح!", "success"); } 
     else { await push(ref(db, 'tests'), payload); saAlert("تم نشر الاختبار بنجاح!", "success"); }
     resetCreateForm(); switchTab('t-library');
@@ -1854,11 +1956,20 @@ window.checkCustomGrade = (el) => { document.getElementById('custom-grade-input'
 window.toggleTestVisibility = (k, s) => { playSound('click'); update(ref(db, `tests/${k}`), { isHidden: s }); saAlert(s ? "تم إخفاء الاختبار عن الطلاب" : "الاختبار الآن مرئي للطلاب", "info"); };
 window.deleteTest = (k) => { saConfirm("هل أنت متأكد من حذف هذا الاختبار؟", () => { remove(ref(db, `tests/${k}`)); remove(ref(db, `results/${k}`)); saAlert("تم الحذف بنجاح", "success"); }); };
 
-window.shareTest = (title, id) => {
+window.shareTest = async (title, id) => {
     playSound('click');
     const url = `${window.location.href.split('?')[0]}?examId=${id}`;
-    if(navigator.share) { navigator.share({ title: 'SA EDU Exam', text: `ندعوكم لأداء اختبار "${title}"`, url: url }).catch(err=>console.log(err)); } 
-    else { navigator.clipboard.writeText(url).then(() => saAlert("تم نسخ رابط الاختبار المباشر!", "success")); }
+    const snap = await get(ref(db, `tests/${id}`)).catch(() => null);
+    const subject = snap?.val()?.subject || '';
+    const questionCount = snap?.val()?.questions?.length || 0;
+    const duration = snap?.val()?.duration || '';
+    const teacher = snap?.val()?.teacher || '';
+    const shareText = `📚 ${subject ? subject + ' - ' : ''}${title}\n👤 ${teacher}\n❓ ${questionCount} سؤال • ⏱ ${duration} دقيقة\n\nاضغط للدخول للاختبار:`;
+    if (navigator.share) {
+        navigator.share({ title: `اختبار: ${title}`, text: shareText, url }).catch(() => {});
+    } else {
+        navigator.clipboard.writeText(`${shareText}\n${url}`).then(() => saAlert("تم نسخ رابط الاختبار!", "success"));
+    }
 };
 function getGradeLabel(c) { return ({'1p':'1 ابتدائي','3s':'3 ثانوي'})[c] || c; }
 
@@ -1928,6 +2039,8 @@ function loadStudentExams() {
         results.forEach(item => {
             if(!item) return; foundExam = true; const { key, val, hasTaken, score } = item;
             const cardWrapper = document.createElement('div'); cardWrapper.className = 'card-wrapper';
+            cardWrapper.setAttribute('data-exam-id', key);
+            const subjectBadge = val.subject ? `<span class="subject-badge">${val.subject}</span>` : '';
             let buttonsHtml = hasTaken ? 
                 `<button class="action-icon share" onclick="shareTest('${val.title}', '${key}')" title="مشاركة"><i class="fas fa-share-alt"></i></button>
                     <button class="action-icon edit" onclick="checkPhoneAndStart('${key}')" title="إعادة الاختبار"><i class="fas fa-redo"></i></button>
@@ -1937,7 +2050,7 @@ function loadStudentExams() {
             cardWrapper.innerHTML = `
                 <div class="mini-card">
                     <div class="card-header">
-                        <div><h3 class="card-title">${val.title}</h3><div class="card-meta"><span>${val.teacher}</span> • ${val.duration} دقيقة</div></div>
+                        <div><h3 class="card-title">${val.title}</h3><div class="card-meta">${subjectBadge}<span>${val.teacher}</span> • ${val.duration} دقيقة</div></div>
                         ${hasTaken ? `<span style="color:var(--success); font-weight:bold;">${score}%</span>` : ''}
                     </div>
                     <div class="icon-actions">${buttonsHtml}</div>
@@ -2353,8 +2466,8 @@ window.openStudentAnalytics = async () => {
             totalPossible += res.total;
             if (testData.grade) grades[testData.grade] = (grades[testData.grade] || 0) + 1;
 
-            let subject = "عام";
-            if (testData.title) {
+            let subject = testData.subject || "عام";
+            if (!testData.subject && testData.title) {
                 if (testData.title.includes("فيزياء")) subject = "فيزياء";
                 else if (testData.title.includes("كيمياء")) subject = "كيمياء";
                 else if (testData.title.includes("أحياء")) subject = "أحياء";
