@@ -1,5 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, push, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import { initVoiceModule } from "./voice.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyAjE-2q6PONBkCin9ZN22gDp9Q8pAH9ZW8",
@@ -475,6 +476,7 @@ function loginSuccess(name, icon, uid) {
         setTimeout(() => initSwipeNavigation('student-app'), 500);
     }
     initDardasha();
+    initVoiceModule(db, currentUser, myUid);
     
     initKeyboardFix();
     
@@ -514,12 +516,27 @@ async function handleDeepLinks() {
     const postId   = params.get('postId');
     const chatUid  = params.get('chat');
     const chatRoom = params.get('room');
+    const aiTab    = params.get('aiTab');
+
+    if (!shareId && !examId && !postId && !chatUid && !chatRoom && !aiTab) return;
+
+    showDeepLinkLoader();
+
+    if (aiTab) {
+        const prefix = selectedRole === 'teacher' ? 't' : 's';
+        updateOGMeta('المساعد الذكي SA AI', 'تحدث مع مساعد الذكاء الاصطناعي على SA EDU');
+        switchTab(`${prefix}-ai`);
+        hideDeepLinkLoader();
+        return;
+    }
 
     if (shareId) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
         updateOGMeta('محادثة AI مشاركة', 'شاهد هذه المحادثة مع الذكاء الاصطناعي على SA EDU');
         switchTab(`${prefix}-ai`);
         loadSharedChat(shareId, prefix);
+        hideDeepLinkLoader();
+        return;
     }
 
     if (examId) {
@@ -531,18 +548,24 @@ async function handleDeepLinks() {
                 `${subjectLabel}: ${d.title}`,
                 `اختبار ${subjectLabel} • ${d.questions?.length || 0} سؤال • ${d.duration} دقيقة • أعده ${d.teacher}`,
             );
-        }
-        if (selectedRole === 'student') {
-            switchTab('s-exams');
-            setTimeout(() => checkPhoneAndStart(examId), 400);
-        } else {
-            switchTab('t-library');
-            setTimeout(() => {
+
+            if (selectedRole === 'student') {
+                switchTab('s-exams');
+                hideDeepLinkLoader();
+                checkPhoneAndStart(examId);
+            } else {
+                switchTab('t-library');
+                hideDeepLinkLoader();
+                await new Promise(r => setTimeout(r, 300));
                 const card = document.querySelector(`[data-exam-id="${examId}"]`);
-                if (card) { card.scrollIntoView({ behavior: 'smooth' }); card.style.border = '2px solid var(--accent-gold)'; }
-            }, 1000);
-            saAlert("هذا رابط امتحان. كمعلم يمكنك تعديله من المكتبة.", "info");
+                if (card) { card.scrollIntoView({ behavior: 'smooth' }); card.style.border = '2px solid var(--accent-gold)'; setTimeout(() => card.style.border = '', 3000); }
+                saAlert("هذا رابط امتحان. كمعلم يمكنك تعديله من المكتبة.", "info");
+            }
+        } else {
+            hideDeepLinkLoader();
+            saAlert("الامتحان غير موجود أو تم حذفه", "error");
         }
+        return;
     }
 
     if (postId) {
@@ -557,15 +580,20 @@ async function handleDeepLinks() {
             );
         }
         switchTab(`${prefix}-reese`);
-        setTimeout(() => {
+        hideDeepLinkLoader();
+        const tryScroll = (attempts = 0) => {
             const el = document.getElementById(`post-${postId}`);
             if (el) {
                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 el.style.transition = 'box-shadow 0.4s';
                 el.style.boxShadow = '0 0 0 3px var(--accent-primary)';
                 setTimeout(() => { el.style.boxShadow = ''; }, 3000);
+            } else if (attempts < 10) {
+                setTimeout(() => tryScroll(attempts + 1), 200);
             }
-        }, 1200);
+        };
+        tryScroll();
+        return;
     }
 
     if (chatRoom) {
@@ -578,28 +606,65 @@ async function handleDeepLinks() {
             const otherIcon = rm.icons?.[otherUid] || 'fa-user';
             updateOGMeta(`محادثة مع ${otherName}`, `افتح المحادثة مع ${otherName} على SA EDU`);
             switchTab(`${prefix}-dardasha`);
-            setTimeout(() => openChatRoom(chatRoom, otherName, otherIcon, otherUid), 700);
+            hideDeepLinkLoader();
+            openChatRoom(chatRoom, otherName, otherIcon, otherUid);
         } else {
             switchTab(`${prefix}-dardasha`);
+            hideDeepLinkLoader();
         }
+        return;
     }
 
     if (chatUid && chatUid !== myUid) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
         const usnap = await get(ref(db, `users/students/${chatUid}`)).catch(() => null)
             || await get(ref(db, `users/teachers/${chatUid}`)).catch(() => null);
+        let otherName = 'مستخدم', otherIcon = 'fa-user';
         if (usnap?.exists()) {
             const ud = usnap.val();
-            updateOGMeta(`تواصل مع ${ud.username || 'مستخدم'}`, `ابدأ محادثة مع ${ud.username || 'مستخدم'} على SA EDU`);
+            otherName = ud.username || 'مستخدم';
+            otherIcon = ud.icon || 'fa-user';
+            updateOGMeta(`تواصل مع ${otherName}`, `ابدأ محادثة مع ${otherName} على SA EDU`);
         }
         switchTab(`${prefix}-dardasha`);
-        searchUserById(chatUid);
+        hideDeepLinkLoader();
+        const existingSnap = await get(ref(db, `user_chats/${myUid}`)).catch(() => null);
+        let existingChatId = null;
+        if (existingSnap?.exists()) {
+            for (const [cid, cinfo] of Object.entries(existingSnap.val())) {
+                if (cinfo.otherUid === chatUid) { existingChatId = cid; break; }
+            }
+        }
+        if (existingChatId) {
+            openChatRoom(existingChatId, otherName, otherIcon, chatUid);
+        } else {
+            searchUserById(chatUid);
+        }
+        return;
     }
+
+    hideDeepLinkLoader();
+}
+
+function showDeepLinkLoader() {
+    let el = document.getElementById('deeplink-loader');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'deeplink-loader';
+        el.innerHTML = `<div class="dl-spinner"></div><p>جاري الفتح...</p>`;
+        document.body.appendChild(el);
+    }
+    el.style.display = 'flex';
+}
+
+function hideDeepLinkLoader() {
+    const el = document.getElementById('deeplink-loader');
+    if (el) el.style.display = 'none';
 }
 
 function handleDeepLinksAndRouting() {
     const params = new URLSearchParams(window.location.search);
-    const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room');
+    const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
     
     if (hasDeepLink) {
         handleDeepLinks();
@@ -769,43 +834,52 @@ function initDardasha() {
     const prefix = selectedRole === 'teacher' ? 't' : 's';
     const list = document.getElementById(`${prefix}-chat-list`);
     list.innerHTML = getMultipleSkeletons(2);
-    
+
     onValue(ref(db, `user_chats/${myUid}`), (snap) => {
         list.innerHTML = '';
-        if(!snap.exists()) {
+        if (!snap.exists()) {
             list.innerHTML = getEmptyStateHTML('chats');
             return;
         }
-        
+
         const chats = snap.val();
-        
-        const chatEntries = Object.entries(chats);
-        chatEntries.forEach(([chatId, chatInfo], index) => {
+        const chatEntries = Object.entries(chats).sort((a, b) => (b[1].lastMsgTime || 0) - (a[1].lastMsgTime || 0));
+
+        chatEntries.forEach(([chatId, chatInfo]) => {
             const el = document.createElement('div');
             el.className = 'chat-item';
             el.onclick = () => openChatRoom(chatId, chatInfo.otherName, chatInfo.otherIcon, chatInfo.otherUid);
+
+            let lastMsgPreview = 'ابدأ المحادثة...';
+            if (chatInfo.lastMsg) {
+                if (chatInfo.lastMsg.startsWith('data:image')) lastMsgPreview = '📷 صورة';
+                else if (chatInfo.lastMsg.startsWith('data:audio')) lastMsgPreview = '🎤 صوت';
+                else lastMsgPreview = chatInfo.lastMsg.substring(0, 35) + (chatInfo.lastMsg.length > 35 ? '...' : '');
+            }
+
+            const timeStr = chatInfo.lastMsgTime ? new Date(chatInfo.lastMsgTime).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' }) : '';
+
             el.innerHTML = `
-                <div class="avatar-frame mini-frame" style="border-color: #666; color: #ccc;"><i class="fas ${chatInfo.otherIcon}"></i></div>
-                <div style="flex:1;">
-                    <div style="font-weight:bold; color:#fff; display:flex; justify-content:space-between;">
-                        <span>${chatInfo.otherName}</span>
-                        <span style="font-size:0.7rem; color:#666;">${chatInfo.lastMsgTime ? new Date(chatInfo.lastMsgTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                <div class="chat-item-avatar"><i class="fas ${chatInfo.otherIcon || 'fa-user'}"></i></div>
+                <div class="chat-item-info">
+                    <div class="chat-item-row">
+                        <span class="chat-item-name">${chatInfo.otherName}</span>
+                        <span class="chat-item-time">${timeStr}</span>
                     </div>
-                    <div style="font-size:0.8rem; color:#aaa; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
-                        ${chatInfo.lastMsg ? (chatInfo.lastMsg.includes('data:image') ? '📷 صورة' : chatInfo.lastMsg) : 'ابدأ المحادثة...'}
-                    </div>
+                    <div class="chat-item-preview">${lastMsgPreview}</div>
                 </div>
             `;
             list.appendChild(el);
-            
             list.appendChild(createAdBanner());
         });
-        
+
         chatEntries.forEach(([chatId, chatInfo]) => {
-             if(chatInfo.lastMsgTime > Date.now() - 5000 && chatInfo.lastMsg !== "📷 صورة" && activeChatRoomId !== chatId) {
-                 playSound('recv');
-                 showToast(chatInfo.otherName, chatInfo.lastMsg?.substring(0, 50) || '...', 'msg', 3500);
-             }
+            if (chatInfo.lastMsgTime > Date.now() - 5000 && activeChatRoomId !== chatId) {
+                if (chatInfo.lastMsg && !chatInfo.lastMsg.startsWith('data:')) {
+                    playSound('recv');
+                    showInAppNotif(chatInfo.otherName, chatInfo.lastMsg.substring(0, 50));
+                }
+            }
         });
     });
 }
@@ -895,13 +969,251 @@ window.startChatWithUser = async (otherName, otherIcon, otherUid) => {
 };
 
 let _activeChatMsgKeys = {};
-let _voiceRecorder = null;
-let _voiceChunks = [];
-let _isVoiceRecording = false;
-let _voiceChatId = null;
-let _voiceOtherUid = null;
+let _chatSpeechRecog = null;
+let _chatSpeechChatId = null;
+let _chatSpeechOtherUid = null;
+let _chatSpeechText = '';
 
-window.openChatRoom = (chatId, name, icon, uid) => {
+window.startChatSpeech = (chatId, otherUid) => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        saAlert('التحويل الصوتي غير مدعوم في هذا المتصفح', 'error');
+        return;
+    }
+    if (_chatSpeechRecog) { cancelChatSpeech(chatId); return; }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    _chatSpeechRecog = new SR();
+    _chatSpeechRecog.lang = 'ar-SA';
+    _chatSpeechRecog.continuous = true;
+    _chatSpeechRecog.interimResults = true;
+    _chatSpeechChatId = chatId;
+    _chatSpeechOtherUid = otherUid;
+    _chatSpeechText = '';
+
+    const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+    const preview = document.getElementById(`speech-preview-${chatId}`);
+    const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+    const sendBtn = document.getElementById(`speech-send-btn-${chatId}`);
+    bar.classList.remove('hidden');
+    micBtn.style.background = '#ef4444';
+    micBtn.style.color = '#fff';
+
+    _chatSpeechRecog.onresult = (e) => {
+        let interim = '';
+        let final = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+            if (e.results[i].isFinal) final += e.results[i][0].transcript;
+            else interim += e.results[i][0].transcript;
+        }
+        _chatSpeechText += final;
+        if (preview) preview.innerText = (_chatSpeechText + interim).trim();
+        if (sendBtn && (_chatSpeechText + interim).trim()) sendBtn.classList.remove('hidden');
+    };
+
+    _chatSpeechRecog.onerror = () => cancelChatSpeech(chatId);
+    _chatSpeechRecog.onend = () => {
+        if (_chatSpeechText.trim()) {
+            if (sendBtn) sendBtn.classList.remove('hidden');
+        } else {
+            cancelChatSpeech(chatId);
+        }
+        _chatSpeechRecog = null;
+    };
+
+    _chatSpeechRecog.start();
+};
+
+window.cancelChatSpeech = (chatId) => {
+    if (_chatSpeechRecog) { try { _chatSpeechRecog.stop(); } catch(e){} _chatSpeechRecog = null; }
+    _chatSpeechText = '';
+    const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+    if (bar) bar.classList.add('hidden');
+    const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+    if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
+    const preview = document.getElementById(`speech-preview-${chatId}`);
+    if (preview) preview.innerText = '';
+    const sendBtn = document.getElementById(`speech-send-btn-${chatId}`);
+    if (sendBtn) sendBtn.classList.add('hidden');
+};
+
+window.sendSpeechText = async (chatId, otherUid) => {
+    const text = _chatSpeechText.trim();
+    if (!text) return;
+    cancelChatSpeech(chatId);
+    const inp = document.getElementById(`chat-input-${chatId}`);
+    if (inp) inp.value = text;
+    await sendChatMessage(chatId, otherUid);
+};
+
+let _activePeerCall = null;
+let _peerCallPeer = null;
+let _peerCallStream = null;
+let _miniCallMinimized = false;
+
+window.initiatePeerCall = async (otherUid, otherName, otherIcon) => {
+    await set(ref(db, `call_requests/${otherUid}`), {
+        from: myUid, fromName: currentUser,
+        fromIcon: localStorage.getItem('sa_icon') || 'fa-user',
+        fromUid: myUid, status: 'pending', timestamp: Date.now()
+    });
+    showOutgoingCallUI(otherName, otherIcon, otherUid);
+};
+
+function showOutgoingCallUI(name, icon, otherUid) {
+    removeCallUI();
+    const div = document.createElement('div');
+    div.id = 'call-ui';
+    div.className = 'call-ui-overlay outgoing';
+    div.innerHTML = `
+        <div class="call-card">
+            <div class="call-avatar"><i class="fas ${icon}"></i></div>
+            <div class="call-name">${name}</div>
+            <div class="call-status-txt">جاري الاتصال...</div>
+            <div class="call-actions">
+                <button class="call-btn end" onclick="endPeerCall('${otherUid}')"><i class="ph-bold ph-phone-disconnect"></i></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(div);
+
+    onValue(ref(db, `call_requests/${myUid}`), (snap) => {
+        if (snap.exists() && snap.val().status === 'accepted') {
+            startActualCall(otherUid, snap.val().peerStreamId, true);
+        } else if (snap.exists() && snap.val().status === 'rejected') {
+            showInAppNotif('مكالمة', `${name} رفض المكالمة`);
+            endPeerCall(otherUid);
+        }
+    });
+};
+
+function showIncomingCallUI(fromName, fromIcon, fromUid, chatPartnerId) {
+    if (document.getElementById('call-ui')) return;
+    const div = document.createElement('div');
+    div.id = 'call-ui';
+    div.className = 'call-ui-overlay incoming';
+    div.innerHTML = `
+        <div class="call-card">
+            <div class="call-avatar incoming-ring"><i class="fas ${fromIcon}"></i></div>
+            <div class="call-name">${fromName}</div>
+            <div class="call-status-txt">مكالمة واردة...</div>
+            <div class="call-actions">
+                <button class="call-btn accept" onclick="acceptPeerCall('${fromUid}')"><i class="ph-bold ph-phone"></i></button>
+                <button class="call-btn end" onclick="rejectPeerCall('${fromUid}')"><i class="ph-bold ph-phone-disconnect"></i></button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(div);
+    playRingtone();
+}
+
+window.acceptPeerCall = async (fromUid) => {
+    stopRingtone();
+    try {
+        _peerCallStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch(e) {
+        saAlert('لا يمكن الوصول للمايكروفون', 'error');
+        rejectPeerCall(fromUid);
+        return;
+    }
+    const roomId = 'call_' + [myUid, fromUid].sort().join('_');
+    await update(ref(db, `call_requests/${fromUid}`), { status: 'accepted', peerStreamId: roomId });
+    await remove(ref(db, `call_requests/${myUid}`));
+    startActualCall(fromUid, roomId, false);
+};
+
+window.rejectPeerCall = async (fromUid) => {
+    stopRingtone();
+    await update(ref(db, `call_requests/${fromUid}`), { status: 'rejected' });
+    await remove(ref(db, `call_requests/${myUid}`));
+    removeCallUI();
+};
+
+async function startActualCall(otherUid, roomId, isCaller) {
+    if (!_peerCallStream) {
+        try { _peerCallStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
+        catch(e) { endPeerCall(otherUid); return; }
+    }
+    removeCallUI();
+    showActiveCallUI(roomId, otherUid);
+    voiceJoinRoom(roomId);
+}
+
+function showActiveCallUI(roomId, otherUid) {
+    const mini = document.createElement('div');
+    mini.id = 'mini-call-bar';
+    mini.className = 'mini-call-bar';
+    mini.innerHTML = `
+        <div class="mini-call-indicator"><span class="mini-live-dot"></span> مكالمة جارية</div>
+        <div style="display:flex;gap:8px;">
+            <button class="mini-call-btn expand" onclick="expandVoiceRoom()"><i class="ph-bold ph-arrows-out"></i></button>
+            <button class="mini-call-btn end" onclick="endPeerCall('${otherUid}')"><i class="ph-bold ph-phone-disconnect"></i></button>
+        </div>
+    `;
+    document.body.appendChild(mini);
+}
+
+window.expandVoiceRoom = () => {
+    document.getElementById('voice-room-screen').classList.add('open');
+    const bar = document.getElementById('mini-call-bar');
+    if (bar) bar.style.display = 'none';
+};
+
+window.endPeerCall = async (otherUid) => {
+    stopRingtone();
+    if (_peerCallStream) { _peerCallStream.getTracks().forEach(t => t.stop()); _peerCallStream = null; }
+    await remove(ref(db, `call_requests/${myUid}`)).catch(() => {});
+    await remove(ref(db, `call_requests/${otherUid}`)).catch(() => {});
+    removeCallUI();
+    if (window.voiceExitRoom) voiceExitRoom();
+};
+
+function removeCallUI() {
+    document.getElementById('call-ui')?.remove();
+    document.getElementById('mini-call-bar')?.remove();
+}
+
+let _ringtoneOsc = null;
+function playRingtone() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.type = 'sine'; osc.frequency.value = 440;
+        g.gain.value = 0.15;
+        osc.start();
+        _ringtoneOsc = { osc, ctx };
+    } catch(e) {}
+}
+function stopRingtone() {
+    if (_ringtoneOsc) {
+        try { _ringtoneOsc.osc.stop(); _ringtoneOsc.ctx.close(); } catch(e) {}
+        _ringtoneOsc = null;
+    }
+}
+
+function showInAppNotif(title, body) {
+    let container = document.getElementById('inapp-notif-container');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'inapp-notif-container';
+        document.body.appendChild(container);
+    }
+    const notif = document.createElement('div');
+    notif.className = 'inapp-notif';
+    notif.innerHTML = `<div class="inapp-notif-title">${title}</div><div class="inapp-notif-body">${body}</div>`;
+    container.appendChild(notif);
+    requestAnimationFrame(() => notif.classList.add('show'));
+    setTimeout(() => { notif.classList.remove('show'); setTimeout(() => notif.remove(), 300); }, 4000);
+    notif.onclick = () => notif.remove();
+}
+
+window.voiceToggleMic = () => {
+    const btn = document.getElementById('vr-mic-btn');
+    const isActive = btn?.classList.contains('active');
+    if (window.voiceToggleMic_impl) { window.voiceToggleMic_impl(); return; }
+    if (btn) btn.classList.toggle('active');
+};
     playSound('click');
     activeChatRoomId = chatId;
     _activeChatMsgKeys = {};
@@ -917,12 +1229,17 @@ window.openChatRoom = (chatId, name, icon, uid) => {
         <div class="chat-header">
             <button class="icon-btn-small" onclick="closeChatWindow('${prefix}')"><i class="ph-bold ph-arrow-right"></i></button>
             <div class="avatar-frame mini-frame" style="width:38px;height:38px;font-size:1.1rem;border-width:1px;"><i class="fas ${icon}"></i></div>
-            <div>
+            <div style="flex:1;min-width:0;">
                 <div style="font-weight:700;font-size:0.95rem;">${name}</div>
                 <div id="chat-online-${chatId}" style="font-size:0.7rem;color:#25d366;">متصل</div>
             </div>
-            <div style="margin-right:auto;display:flex;gap:10px;">
-                <button class="icon-btn-small" onclick="copyProfileLinkFor('${uid}')" title="نسخ رابط"><i class="ph-bold ph-link"></i></button>
+            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button class="icon-btn-small call-icon-btn" onclick="initiatePeerCall('${uid}','${name}','${icon}')" title="مكالمة صوتية">
+                    <i class="ph-bold ph-phone"></i>
+                </button>
+                <button class="icon-btn-small" onclick="copyProfileLinkFor('${uid}')" title="نسخ رابط">
+                    <i class="ph-bold ph-link"></i>
+                </button>
             </div>
         </div>
         <div class="chat-msgs-area" id="chat-msgs-${chatId}"></div>
@@ -936,13 +1253,13 @@ window.openChatRoom = (chatId, name, icon, uid) => {
                 oninput="toggleChatMicSend('${chatId}')"
                 onfocus="handleChatInputFocus(this)">
             <button id="chat-send-btn-${chatId}" class="send-btn" style="display:none" onclick="sendChatMessage('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
-            <button id="chat-mic-btn-${chatId}" class="send-btn" style="background:rgba(255,255,255,0.08);color:#aaa;" onclick="toggleVoiceRecord('${chatId}','${uid}')"><i class="ph-bold ph-microphone"></i></button>
+            <button id="chat-mic-btn-${chatId}" class="send-btn mic-idle-btn" onclick="startChatSpeech('${chatId}','${uid}')"><i class="ph-bold ph-microphone"></i></button>
         </div>
         <div id="voice-recording-bar-${chatId}" class="voice-recording-bar hidden">
             <div class="voice-wave-anim"><span></span><span></span><span></span><span></span><span></span></div>
-            <span id="voice-timer-${chatId}" style="color:#ef4444;font-weight:bold;font-size:0.9rem;min-width:40px;">0:00</span>
-            <button onclick="cancelVoiceRecord('${chatId}')" style="background:none;border:none;color:#ef4444;font-size:1.2rem;cursor:pointer;"><i class="ph-bold ph-x"></i></button>
-            <button onclick="stopAndSendVoice('${chatId}','${uid}')" style="background:#25d366;border:none;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;cursor:pointer;font-size:0.85rem;"><i class="ph-bold ph-paper-plane-tilt"></i> إرسال</button>
+            <span id="speech-preview-${chatId}" class="speech-preview-txt"></span>
+            <button onclick="cancelChatSpeech('${chatId}')" class="speech-cancel-btn"><i class="ph-bold ph-x"></i></button>
+            <button id="speech-send-btn-${chatId}" class="speech-send-btn hidden" onclick="sendSpeechText('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
         </div>
     `;
 
@@ -978,12 +1295,20 @@ window.openChatRoom = (chatId, name, icon, uid) => {
             const lastMsg = msgArr[msgArr.length - 1];
             if (lastMsg && lastMsg.sender !== myUid) {
                 playSound('recv');
-                showToast(name, lastMsg.type === 'image' ? '📷 صورة' : lastMsg.type === 'voice' ? '🎤 رسالة صوتية' : (lastMsg.text?.substring(0, 50) || ''), 'msg', 3500);
+                showInAppNotif(name, lastMsg.type === 'images' ? '📷 صورة' : lastMsg.type === 'voice' ? '🎤 رسالة صوتية' : (lastMsg.text?.substring(0, 60) || ''));
                 update(ref(db, `chats/${chatId}/${lastMsg._key}`), { readBy: myUid });
             }
         }
         prevCount = msgArr.length;
         isFirstLoad = false;
+    });
+
+    onValue(ref(db, `call_requests/${myUid}`), (snap) => {
+        if (!snap.exists()) return;
+        const req = snap.val();
+        if (req.from === uid && req.status === 'pending') {
+            showIncomingCallUI(req.fromName, req.fromIcon, req.fromUid, uid);
+        }
     });
 
     update(ref(db, `users/${selectedRole}s/${currentUser}`), { online: true, lastSeen: Date.now() });
@@ -1011,7 +1336,11 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
                 <button class="voice-play-btn" onclick="toggleVoicePlay(this,'${msg._key}')"><i class="ph-bold ph-play"></i></button>
                 <div class="voice-waveform">${generateWaveform()}</div>
                 <span class="voice-duration">${msg.duration || '0:00'}</span>
-                <audio id="audio-${msg._key}" src="${msg.text}" preload="metadata" onended="resetVoiceBtn('${msg._key}')"></audio>
+                <audio id="audio-${msg._key}" preload="metadata" onended="resetVoiceBtn('${msg._key}')">
+                    <source src="${msg.text}" type="audio/webm">
+                    <source src="${msg.text}" type="audio/ogg">
+                    <source src="${msg.text}" type="audio/mpeg">
+                </audio>
             </div>
             ${buildMsgFooter(msg, isMe)}
         </div>`;
@@ -1021,9 +1350,16 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
 
     wrap.innerHTML = content;
 
-    if (!isDeleted && isMe) {
+    if (!isDeleted) {
+        let holdTimer = null;
+        const onTouchStart = (e) => {
+            holdTimer = setTimeout(() => { showMsgContextMenu(e.touches[0], msg._key, chatId, otherUid, msg.text, isMe); }, 550);
+        };
+        const clearHold = () => clearTimeout(holdTimer);
+        wrap.addEventListener('touchstart', onTouchStart, { passive: true });
+        wrap.addEventListener('touchend', clearHold);
+        wrap.addEventListener('touchmove', clearHold);
         wrap.addEventListener('contextmenu', (e) => { e.preventDefault(); showMsgContextMenu(e, msg._key, chatId, otherUid, msg.text, isMe); });
-        wrap.addEventListener('touchstart', touchHoldHandler(wrap, msg._key, chatId, otherUid, msg.text, isMe), { passive: true });
     }
 
     container.appendChild(wrap);
@@ -1045,16 +1381,26 @@ function generateWaveform() {
     return html;
 }
 
-function touchHoldHandler(wrap, key, chatId, otherUid, text, isMe) {
-    let holdTimer = null;
-    return function(e) {
-        holdTimer = setTimeout(() => { showMsgContextMenu(e.touches[0], key, chatId, otherUid, text, isMe); }, 600);
-        wrap.addEventListener('touchend', () => clearTimeout(holdTimer), { once: true });
-        wrap.addEventListener('touchmove', () => clearTimeout(holdTimer), { once: true });
-    };
-}
+window.toggleVoicePlay = (btn, key) => {
+    const audio = document.getElementById(`audio-${key}`);
+    if (!audio) return;
+    if (audio.paused) {
+        document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
+        document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
+        audio.play().catch(() => {});
+        btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+    } else {
+        audio.pause();
+        btn.innerHTML = '<i class="ph-bold ph-play"></i>';
+    }
+};
 
-function showMsgContextMenu(e, msgKey, chatId, otherUid, text, isMe) {
+window.resetVoiceBtn = (key) => {
+    const btn = document.querySelector(`#msg-wrap-${key} .voice-play-btn`);
+    if (btn) btn.innerHTML = '<i class="ph-bold ph-play"></i>';
+};
+
+
     document.querySelectorAll('.msg-ctx-menu').forEach(el => el.remove());
     const menu = document.createElement('div');
     menu.className = 'msg-ctx-menu';
@@ -1079,80 +1425,6 @@ window.toggleChatMicSend = (chatId) => {
     if (!inp || !send || !mic) return;
     if (inp.value.trim()) { send.style.display = 'flex'; mic.style.display = 'none'; }
     else { send.style.display = 'none'; mic.style.display = 'flex'; }
-};
-
-window.toggleVoiceRecord = async (chatId, otherUid) => {
-    if (_isVoiceRecording) { stopAndSendVoice(chatId, otherUid); return; }
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        _voiceRecorder = new MediaRecorder(stream);
-        _voiceChunks = [];
-        _voiceChatId = chatId;
-        _voiceOtherUid = otherUid;
-        _isVoiceRecording = true;
-        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-        bar.classList.remove('hidden');
-        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-        micBtn.style.background = '#ef4444';
-        micBtn.style.color = '#fff';
-
-        let seconds = 0;
-        const timerEl = document.getElementById(`voice-timer-${chatId}`);
-        const timerInt = setInterval(() => {
-            seconds++;
-            const m = Math.floor(seconds / 60);
-            const s = seconds % 60;
-            if (timerEl) timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
-        }, 1000);
-        _voiceRecorder._timerInt = timerInt;
-        _voiceRecorder._seconds = () => seconds;
-
-        _voiceRecorder.ondataavailable = (e) => { if (e.data.size > 0) _voiceChunks.push(e.data); };
-        _voiceRecorder.start(100);
-    } catch (e) {
-        saAlert('لم يُسمح بالوصول للمايكروفون', 'error');
-    }
-};
-
-window.cancelVoiceRecord = (chatId) => {
-    if (_voiceRecorder) { clearInterval(_voiceRecorder._timerInt); _voiceRecorder.stop(); _voiceRecorder.stream?.getTracks().forEach(t => t.stop()); }
-    _isVoiceRecording = false; _voiceChunks = [];
-    const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-    if (bar) bar.classList.add('hidden');
-    const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-    if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
-};
-
-window.stopAndSendVoice = async (chatId, otherUid) => {
-    if (!_voiceRecorder || !_isVoiceRecording) return;
-    const seconds = _voiceRecorder._seconds();
-    clearInterval(_voiceRecorder._timerInt);
-
-    return new Promise((resolve) => {
-        _voiceRecorder.onstop = async () => {
-            const blob = new Blob(_voiceChunks, { type: 'audio/webm' });
-            const reader = new FileReader();
-            reader.onload = async () => {
-                const b64 = reader.result;
-                const m = Math.floor(seconds / 60);
-                const s = seconds % 60;
-                const dur = `${m}:${s < 10 ? '0' : ''}${s}`;
-                playSound('sent');
-                await push(ref(db, `chats/${chatId}`), { sender: myUid, text: b64, type: 'voice', duration: dur, timestamp: Date.now() });
-                await update(ref(db, `user_chats/${myUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
-                await update(ref(db, `user_chats/${otherUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
-                resolve();
-            };
-            reader.readAsDataURL(blob);
-        };
-        _voiceRecorder.stop();
-        _voiceRecorder.stream?.getTracks().forEach(t => t.stop());
-        _isVoiceRecording = false; _voiceChunks = [];
-        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-        if (bar) bar.classList.add('hidden');
-        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-        if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
-    });
 };
 
 window.toggleVoicePlay = (btn, key) => {
@@ -1944,8 +2216,16 @@ window.saveTest = async () => {
     const title = document.getElementById('new-test-name').value;
     let grade = document.getElementById('new-test-grade').value; if(grade === 'custom') grade = document.getElementById('custom-grade-input').value;
     const duration = document.getElementById('new-test-duration').value;
-    const subject = document.getElementById('new-test-subject').value || 'عام';
-    if(!title || !grade || !duration || currentQuestions.length === 0) return saAlert("البيانات ناقصة (تأكد من إضافة سؤال واحد على الأقل)", "error");
+    const subject = document.getElementById('new-test-subject').value;
+    if(!title || !grade || !duration || !subject || currentQuestions.length === 0) {
+        if (!subject) {
+            const el = document.getElementById('new-test-subject');
+            el.classList.add('new-test-subject-required');
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            setTimeout(() => el.classList.remove('new-test-subject-required'), 1500);
+        }
+        return saAlert("البيانات ناقصة — تأكد من اختيار المادة وإضافة سؤال واحد على الأقل", "error");
+    }
     const payload = { teacher: currentUser, title, grade, duration, subject, questions: currentQuestions, timestamp: Date.now(), isHidden: false };
     if (isEditingMode && editingTestId) { await update(ref(db, `tests/${editingTestId}`), payload); saAlert("تم تعديل الاختبار بنجاح!", "success"); } 
     else { await push(ref(db, 'tests'), payload); saAlert("تم نشر الاختبار بنجاح!", "success"); }
@@ -2582,7 +2862,6 @@ window.openStudentAnalytics = async () => {
         <div style="text-align:center;font-size:0.75rem;color:#555;margin-top:15px;">بناءً على ${examCount} اختبار</div>
     `;
 };
-
 
 const XP_LEVELS = [
     { name: 'مبتدئ', minXP: 0, maxXP: 200, cssClass: 'level-1', icon: '🌱', unlocks: 'اختبارات سهلة' },
