@@ -3272,44 +3272,57 @@ transition: 0.2s;
 
 .mini-call-bar {
 position: fixed;
-top: 0;
-left: 0;
-right: 0;
-background: #10b981;
-padding: 10px 16px;
+bottom: calc(var(--nav-height) + 12px);
+left: 50%;
+transform: translateX(-50%) translateY(20px);
+background: #0a1a0f;
+border: 1.5px solid #10b981;
+border-radius: 999px;
+padding: 8px 14px 8px 12px;
 display: flex;
 align-items: center;
-justify-content: space-between;
+gap: 10px;
 z-index: 18000;
-padding-top: max(10px, env(safe-area-inset-top));
+box-shadow: 0 4px 24px rgba(16,185,129,0.35);
+opacity: 0;
+transition: opacity 0.25s, transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+white-space: nowrap;
 }
-.mini-call-indicator {
+.mini-call-bar.visible {
+opacity: 1;
+transform: translateX(-50%) translateY(0);
+}
+.mini-call-left {
 display: flex;
 align-items: center;
-gap: 8px;
-color: #fff;
-font-size: 0.85rem;
+gap: 7px;
+color: #10b981;
+font-size: 0.8rem;
 font-weight: 700;
 }
+.mini-call-label { color: #10b981; }
 .mini-live-dot {
 width: 8px;
 height: 8px;
-background: #fff;
+background: #10b981;
 border-radius: 50%;
 animation: pulse 1s infinite;
+flex-shrink: 0;
 }
 .mini-call-btn {
-width: 32px;
-height: 32px;
+width: 30px;
+height: 30px;
 border-radius: 50%;
 border: none;
 cursor: pointer;
 display: flex;
 align-items: center;
 justify-content: center;
-font-size: 0.9rem;
+font-size: 0.85rem;
+transition: transform 0.15s;
 }
-.mini-call-btn.expand { background: rgba(255,255,255,0.2); color: #fff; }
+.mini-call-btn:active { transform: scale(0.9); }
+.mini-call-btn.expand { background: rgba(16,185,129,0.15); color: #10b981; }
 .mini-call-btn.end { background: #ef4444; color: #fff; }
 
 #inapp-notif-container {
@@ -3338,3 +3351,12 @@ pointer-events: all;
 .inapp-notif.show { opacity: 1; transform: translateY(0); }
 .inapp-notif-title { font-size: 0.82rem; font-weight: 800; color: #fff; margin-bottom: 2px; }
 .inapp-notif-body { font-size: 0.78rem; color: #888; }
+
+.vr-dock-btn.minimize-btn {
+background: rgba(255,255,255,0.07);
+color: #aaa;
+}
+.vr-dock-btn.minimize-btn:hover {
+background: rgba(16,185,129,0.15);
+color: #10b981;
+}
