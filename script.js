@@ -114,7 +114,10 @@ function initSwipeNavigation(portalId) {
             _swipeStartTarget.closest('input') ||
             _swipeStartTarget.closest('textarea') ||
             _swipeStartTarget.closest('.full-screen-overlay') ||
-            _swipeStartTarget.closest('.ai-messages')
+            _swipeStartTarget.closest('.ai-messages') ||
+            _swipeStartTarget.closest('.mini-call-bar') ||
+            _swipeStartTarget.closest('#voice-room-screen') ||
+            _swipeStartTarget.closest('#call-ui')
         )) return;
         
         const dx = e.changedTouches[0].clientX - _swipeStartX;
@@ -338,17 +341,7 @@ window.saConfirm = (msg, onConfirm) => {
 window.closeSaAlert = () => { playSound('click'); document.getElementById('sa-custom-alert').classList.remove('active'); };
 
 function createAdBanner() {
-    const container = document.createElement('div'); container.className = 'ad-banner';
-    const iframe = document.createElement('iframe');
-    iframe.style.width = '468px'; iframe.style.height = '60px'; iframe.style.border = 'none';
-    iframe.style.overflow = 'hidden'; iframe.style.maxWidth = '100%'; 
-    const adContent = `<html><body style="margin:0;padding:0;background:transparent;display:flex;justify-content:center;align-items:center;"><script async>atOptions={'key':'e0f63746bfceb42ce1134aaff1b6709d','format':'iframe','height':60,'width':468,'params':{}};<\/script><script async src="https://www.highperformanceformat.com/e0f63746bfceb42ce1134aaff1b6709d/invoke.js"><\/script></body></html>`;
-    container.appendChild(iframe);
-    setTimeout(() => { 
-        const doc = iframe.contentWindow.document; 
-        doc.open(); doc.write(adContent); doc.close(); 
-    }, 50);
-    return container;
+    return document.createElement('span');
 }
 
 const getBase64 = (file) => new Promise((resolve) => {
@@ -477,7 +470,7 @@ function loginSuccess(name, icon, uid) {
     }
     initDardasha();
     initVoiceModule(db, currentUser, myUid);
-    
+    initGlobalCallListener();
     initKeyboardFix();
     
     handleDeepLinksAndRouting();
@@ -1158,23 +1151,38 @@ async function startActualCall(otherUid, roomId, isCaller) {
 }
 
 function showActiveCallUI(roomId, otherUid) {
+    document.getElementById('mini-call-bar')?.remove();
     const mini = document.createElement('div');
     mini.id = 'mini-call-bar';
     mini.className = 'mini-call-bar';
     mini.innerHTML = `
-        <div class="mini-call-indicator"><span class="mini-live-dot"></span> مكالمة جارية</div>
-        <div style="display:flex;gap:8px;">
-            <button class="mini-call-btn expand" onclick="expandVoiceRoom()"><i class="ph-bold ph-arrows-out"></i></button>
-            <button class="mini-call-btn end" onclick="endPeerCall('${otherUid}')"><i class="ph-bold ph-phone-disconnect"></i></button>
+        <div class="mini-call-left">
+            <span class="mini-live-dot"></span>
+            <span class="mini-call-label">مكالمة جارية</span>
         </div>
+        <button class="mini-call-btn expand" onclick="expandVoiceRoom()" title="فتح المكالمة">
+            <i class="ph-bold ph-arrows-out"></i>
+        </button>
+        <button class="mini-call-btn end" onclick="endPeerCall('${otherUid}')" title="إنهاء">
+            <i class="ph-bold ph-phone-disconnect"></i>
+        </button>
     `;
     document.body.appendChild(mini);
+    requestAnimationFrame(() => mini.classList.add('visible'));
 }
 
 window.expandVoiceRoom = () => {
-    document.getElementById('voice-room-screen').classList.add('open');
+    const screen = document.getElementById('voice-room-screen');
+    if (screen) screen.classList.add('open');
     const bar = document.getElementById('mini-call-bar');
     if (bar) bar.style.display = 'none';
+};
+
+window.minimizeVoiceRoom = () => {
+    const screen = document.getElementById('voice-room-screen');
+    if (screen) screen.classList.remove('open');
+    const bar = document.getElementById('mini-call-bar');
+    if (bar) { bar.style.display = ''; bar.classList.add('visible'); }
 };
 
 window.endPeerCall = async (otherUid) => {
@@ -1209,6 +1217,18 @@ function stopRingtone() {
         try { _ringtoneOsc.osc.stop(); _ringtoneOsc.ctx.close(); } catch(e) {}
         _ringtoneOsc = null;
     }
+}
+
+function initGlobalCallListener() {
+    onValue(ref(db, `call_requests/${myUid}`), (snap) => {
+        if (!snap.exists()) return;
+        const req = snap.val();
+        if (req.status === 'pending' && req.from !== myUid) {
+            if (!document.getElementById('call-ui')) {
+                showIncomingCallUI(req.fromName, req.fromIcon, req.fromUid);
+            }
+        }
+    });
 }
 
 function showInAppNotif(title, body) {
@@ -1325,14 +1345,6 @@ window.openChatRoom = (chatId, name, icon, uid) => {
         isFirstLoad = false;
     });
 
-    onValue(ref(db, `call_requests/${myUid}`), (snap) => {
-        if (!snap.exists()) return;
-        const req = snap.val();
-        if (req.from === uid && req.status === 'pending') {
-            showIncomingCallUI(req.fromName, req.fromIcon, req.fromUid, uid);
-        }
-    });
-
     update(ref(db, `users/${selectedRole}s/${currentUser}`), { online: true, lastSeen: Date.now() });
 };
 
@@ -1406,8 +1418,19 @@ window.toggleVoicePlay = (btn, key) => {
     if (audio.paused) {
         document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
         document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
-        audio.play().catch(() => {});
-        btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.then(() => {
+                btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+            }).catch(err => {
+                audio.load();
+                audio.play().then(() => {
+                    btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+                }).catch(() => {});
+            });
+        } else {
+            btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+        }
     } else {
         audio.pause();
         btn.innerHTML = '<i class="ph-bold ph-play"></i>';
@@ -1444,25 +1467,6 @@ window.toggleChatMicSend = (chatId) => {
     if (!inp || !send || !mic) return;
     if (inp.value.trim()) { send.style.display = 'flex'; mic.style.display = 'none'; }
     else { send.style.display = 'none'; mic.style.display = 'flex'; }
-};
-
-window.toggleVoicePlay = (btn, key) => {
-    const audio = document.getElementById(`audio-${key}`);
-    if (!audio) return;
-    if (audio.paused) {
-        document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
-        document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
-        audio.play();
-        btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-    } else {
-        audio.pause();
-        btn.innerHTML = '<i class="ph-bold ph-play"></i>';
-    }
-};
-
-window.resetVoiceBtn = (key) => {
-    const btn = document.querySelector(`#msg-wrap-${key} .voice-play-btn`);
-    if (btn) btn.innerHTML = '<i class="ph-bold ph-play"></i>';
 };
 
 window.sendChatImages = async (input, chatId, otherUid) => {
