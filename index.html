@@ -179,7 +179,12 @@
                                 <div class="avatar-frame mini-frame" id="t-chat-my-avatar"></div>
                                 <span>دردشة</span>
                             </div>
-                            <button class="icon-btn-small" onclick="toggleUserSearchModal()"><i class="fas fa-plus"></i></button>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button class="icon-btn-small voice-room-entry-btn" onclick="openVoiceRooms()" title="غرف الصوت">
+                                    <i class="ph-bold ph-microphone"></i>
+                                </button>
+                                <button class="icon-btn-small" onclick="toggleUserSearchModal()"><i class="fas fa-plus"></i></button>
+                            </div>
                         </div>
                         <div class="chat-search-bar">
                             <i class="fas fa-search"></i>
@@ -229,8 +234,8 @@
                     </select>
                     <input type="number" id="new-test-duration" class="smart-input" placeholder="المدة (د)" style="width: 100px; text-align: center;">
                 </div>
-                <select id="new-test-subject" class="smart-input" style="margin-top:0;">
-                    <option value="" disabled selected>📚 اختر المادة</option>
+                <select id="new-test-subject" class="smart-input" style="margin-top:0; border-color: rgba(255,255,255,0.1);" required>
+                    <option value="" disabled selected>📚 اختر المادة (مطلوب) *</option>
                     <option value="رياضيات">📐 رياضيات</option>
                     <option value="فيزياء">⚡ فيزياء</option>
                     <option value="كيمياء">🧪 كيمياء</option>
@@ -416,7 +421,12 @@
                                 <div class="avatar-frame mini-frame" id="s-chat-my-avatar"></div>
                                 <span>دردشة</span>
                             </div>
-                            <button class="icon-btn-small" onclick="toggleUserSearchModal()"><i class="fas fa-plus"></i></button>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <button class="icon-btn-small voice-room-entry-btn" onclick="openVoiceRooms()" title="غرف الصوت">
+                                    <i class="ph-bold ph-microphone"></i>
+                                </button>
+                                <button class="icon-btn-small" onclick="toggleUserSearchModal()"><i class="fas fa-plus"></i></button>
+                            </div>
                         </div>
                         <div class="chat-search-bar">
                             <i class="fas fa-search"></i>
@@ -783,6 +793,90 @@
     }
     </script>
 
+    <!-- ============ VOICE ROOMS SYSTEM ============ -->
+    <div id="voice-audio-container" style="display:none;"></div>
+
+    <!-- Voice Rooms List Panel -->
+    <div class="vr-panel-backdrop" onclick="closeVoiceRooms()"></div>
+    <div id="voice-rooms-panel" class="vr-panel">
+        <div class="vr-panel-handle"></div>
+        <div class="vr-panel-header">
+            <div>
+                <div class="vr-panel-title"><i class="ph-bold ph-microphone"></i> غرف الصوت</div>
+                <div class="vr-panel-sub">تحدث مع الجميع مباشرة</div>
+            </div>
+            <button class="icon-btn-small" onclick="closeVoiceRooms()"><i class="ph-bold ph-x"></i></button>
+        </div>
+
+        <div class="vr-create-box">
+            <input type="text" id="voice-room-name-input" class="vr-name-input" placeholder="اسم الغرفة (اختياري)..." maxlength="30">
+            <button class="vr-create-btn" onclick="voiceCreateRoom()">
+                <i class="ph-bold ph-plus-circle"></i> إنشاء غرفة جديدة
+            </button>
+        </div>
+
+        <div class="vr-divider"><span>الغرف المفتوحة</span></div>
+
+        <div id="voice-rooms-list" class="vr-rooms-list">
+            <div class="vr-loading"><div class="vr-spin"></div></div>
+        </div>
+    </div>
+
+    <div id="voice-audio-gate" class="vr-gate">
+        <div class="vr-gate-card">
+            <button class="vr-gate-close" onclick="closeVoiceGate()"><i class="ph-bold ph-x"></i></button>
+            <div class="vr-gate-icon">
+                <i class="ph-bold ph-microphone"></i>
+                <div class="vr-gate-ripple"></div>
+                <div class="vr-gate-ripple" style="animation-delay:0.4s"></div>
+            </div>
+            <div class="vr-gate-title">الوصول للمايكروفون</div>
+            <div class="vr-gate-desc">SA EDU تحتاج إذن للمايكروفون لتفعيل المكالمة الصوتية الجماعية</div>
+            <button id="voice-gate-btn" class="vr-gate-btn" onclick="voiceConfirmEntry()">
+                <i class="ph-bold ph-microphone"></i> دخول الغرفة
+            </button>
+        </div>
+    </div>
+
+    <div id="voice-room-screen" class="vr-room-screen">
+        <div class="vr-room-bg"></div>
+
+        <div class="vr-room-topbar">
+            <div class="vr-live-badge"><span class="vr-pulse"></span> مباشر</div>
+            <div>
+                <div id="vroom-name" class="vr-room-title">غرفة صوتية</div>
+                <div id="vroom-count" class="vr-room-count">0 مشارك</div>
+            </div>
+            <button class="vr-topbar-btn" onclick="voiceShareRoom()" title="مشاركة">
+                <i class="ph-bold ph-share-network"></i>
+            </button>
+        </div>
+
+        <div id="voice-users-grid" class="vr-users-grid"></div>
+
+        <div id="vr-filter-menu" class="vr-filter-menu">
+            <div class="vr-filter-opt active" onclick="voiceApplyFilter('none', this)"><i class="ph-bold ph-wave-sawtooth"></i><span>عادي</span></div>
+            <div class="vr-filter-opt" onclick="voiceApplyFilter('deep', this)"><i class="ph-bold ph-equalizer"></i><span>عميق</span></div>
+            <div class="vr-filter-opt" onclick="voiceApplyFilter('echo', this)"><i class="ph-bold ph-arrows-clockwise"></i><span>صدى</span></div>
+            <div class="vr-filter-opt" onclick="voiceApplyFilter('robot', this)"><i class="ph-bold ph-robot"></i><span>روبوت</span></div>
+        </div>
+
+        <div class="vr-dock-wrap">
+            <div class="vr-dock">
+                <button id="vr-mic-btn" class="vr-dock-btn active" onclick="voiceToggleMic()" title="كتم/تشغيل">
+                    <i class="ph-bold ph-microphone"></i>
+                </button>
+                <button class="vr-dock-btn" onclick="voiceToggleFilters()" title="فلاتر الصوت">
+                    <i class="ph-bold ph-sliders-horizontal"></i>
+                </button>
+                <button class="vr-dock-btn danger" onclick="voiceExitRoom()" title="مغادرة">
+                    <i class="ph-bold ph-phone-disconnect"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
 </body>
 </html>
