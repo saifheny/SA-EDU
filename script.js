@@ -969,81 +969,100 @@ window.startChatWithUser = async (otherName, otherIcon, otherUid) => {
 };
 
 let _activeChatMsgKeys = {};
-let _chatSpeechRecog = null;
-let _chatSpeechChatId = null;
-let _chatSpeechOtherUid = null;
-let _chatSpeechText = '';
+let _voiceRec = null;
+let _voiceChunks = [];
+let _voiceRecording = false;
+let _voiceTimerInt = null;
+let _voiceSeconds = 0;
 
-window.startChatSpeech = (chatId, otherUid) => {
-    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-        saAlert('التحويل الصوتي غير مدعوم في هذا المتصفح', 'error');
+window.startChatSpeech = async (chatId, otherUid) => {
+    if (_voiceRecording) {
+        stopAndSendVoiceMsg(chatId, otherUid);
         return;
     }
-    if (_chatSpeechRecog) { cancelChatSpeech(chatId); return; }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : 'audio/ogg';
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    _chatSpeechRecog = new SR();
-    _chatSpeechRecog.lang = 'ar-SA';
-    _chatSpeechRecog.continuous = true;
-    _chatSpeechRecog.interimResults = true;
-    _chatSpeechChatId = chatId;
-    _chatSpeechOtherUid = otherUid;
-    _chatSpeechText = '';
+        _voiceRec = new MediaRecorder(stream, { mimeType });
+        _voiceChunks = [];
+        _voiceSeconds = 0;
+        _voiceRecording = true;
 
-    const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-    const preview = document.getElementById(`speech-preview-${chatId}`);
-    const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-    const sendBtn = document.getElementById(`speech-send-btn-${chatId}`);
-    bar.classList.remove('hidden');
-    micBtn.style.background = '#ef4444';
-    micBtn.style.color = '#fff';
+        _voiceRec.ondataavailable = (e) => { if (e.data && e.data.size > 0) _voiceChunks.push(e.data); };
+        _voiceRec.start(200);
 
-    _chatSpeechRecog.onresult = (e) => {
-        let interim = '';
-        let final = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-            if (e.results[i].isFinal) final += e.results[i][0].transcript;
-            else interim += e.results[i][0].transcript;
-        }
-        _chatSpeechText += final;
-        if (preview) preview.innerText = (_chatSpeechText + interim).trim();
-        if (sendBtn && (_chatSpeechText + interim).trim()) sendBtn.classList.remove('hidden');
-    };
+        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+        const timerEl = document.getElementById(`voice-timer-${chatId}`);
+        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+        if (bar) bar.classList.remove('hidden');
+        if (micBtn) { micBtn.style.background = '#ef4444'; micBtn.style.color = '#fff'; }
 
-    _chatSpeechRecog.onerror = () => cancelChatSpeech(chatId);
-    _chatSpeechRecog.onend = () => {
-        if (_chatSpeechText.trim()) {
-            if (sendBtn) sendBtn.classList.remove('hidden');
-        } else {
-            cancelChatSpeech(chatId);
-        }
-        _chatSpeechRecog = null;
-    };
+        _voiceTimerInt = setInterval(() => {
+            _voiceSeconds++;
+            const m = Math.floor(_voiceSeconds / 60);
+            const s = _voiceSeconds % 60;
+            if (timerEl) timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+            if (_voiceSeconds >= 120) stopAndSendVoiceMsg(chatId, otherUid);
+        }, 1000);
 
-    _chatSpeechRecog.start();
+    } catch(e) {
+        saAlert('لم يُسمح بالوصول للمايكروفون', 'error');
+    }
 };
 
 window.cancelChatSpeech = (chatId) => {
-    if (_chatSpeechRecog) { try { _chatSpeechRecog.stop(); } catch(e){} _chatSpeechRecog = null; }
-    _chatSpeechText = '';
+    clearInterval(_voiceTimerInt);
+    if (_voiceRec && _voiceRecording) {
+        _voiceRec.stream?.getTracks().forEach(t => t.stop());
+        try { _voiceRec.stop(); } catch(e) {}
+    }
+    _voiceRec = null; _voiceChunks = []; _voiceRecording = false; _voiceSeconds = 0;
     const bar = document.getElementById(`voice-recording-bar-${chatId}`);
     if (bar) bar.classList.add('hidden');
     const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
     if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
-    const preview = document.getElementById(`speech-preview-${chatId}`);
-    if (preview) preview.innerText = '';
-    const sendBtn = document.getElementById(`speech-send-btn-${chatId}`);
-    if (sendBtn) sendBtn.classList.add('hidden');
 };
 
-window.sendSpeechText = async (chatId, otherUid) => {
-    const text = _chatSpeechText.trim();
-    if (!text) return;
-    cancelChatSpeech(chatId);
-    const inp = document.getElementById(`chat-input-${chatId}`);
-    if (inp) inp.value = text;
-    await sendChatMessage(chatId, otherUid);
-};
+window.stopAndSendVoiceMsg = async function(chatId, otherUid) {
+    if (!_voiceRec || !_voiceRecording) return;
+    clearInterval(_voiceTimerInt);
+    const seconds = _voiceSeconds;
+    const mimeType = _voiceRec.mimeType || 'audio/webm';
+
+    return new Promise((resolve) => {
+        _voiceRec.onstop = async () => {
+            if (_voiceChunks.length === 0) { resolve(); return; }
+            const blob = new Blob(_voiceChunks, { type: mimeType });
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const b64 = reader.result;
+                const dur = `${Math.floor(seconds/60)}:${(seconds%60)<10?'0':''}${seconds%60}`;
+                playSound('sent');
+                await push(ref(db, `chats/${chatId}`), {
+                    sender: myUid, text: b64, type: 'voice',
+                    duration: dur, mimeType, timestamp: Date.now()
+                });
+                await update(ref(db, `user_chats/${myUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
+                await update(ref(db, `user_chats/${otherUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
+                resolve();
+            };
+            reader.readAsDataURL(blob);
+        };
+        _voiceRec.stream?.getTracks().forEach(t => t.stop());
+        try { _voiceRec.stop(); } catch(e) {}
+        _voiceRec = null; _voiceChunks = []; _voiceRecording = false; _voiceSeconds = 0;
+
+        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+        if (bar) bar.classList.add('hidden');
+        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+        if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
+    });
+}
 
 let _activePeerCall = null;
 let _peerCallPeer = null;
@@ -1214,6 +1233,8 @@ window.voiceToggleMic = () => {
     if (window.voiceToggleMic_impl) { window.voiceToggleMic_impl(); return; }
     if (btn) btn.classList.toggle('active');
 };
+
+window.openChatRoom = (chatId, name, icon, uid) => {
     playSound('click');
     activeChatRoomId = chatId;
     _activeChatMsgKeys = {};
@@ -1257,9 +1278,10 @@ window.voiceToggleMic = () => {
         </div>
         <div id="voice-recording-bar-${chatId}" class="voice-recording-bar hidden">
             <div class="voice-wave-anim"><span></span><span></span><span></span><span></span><span></span></div>
-            <span id="speech-preview-${chatId}" class="speech-preview-txt"></span>
+            <span id="voice-timer-${chatId}" style="color:#ef4444;font-weight:700;font-size:0.85rem;min-width:38px;">0:00</span>
+            <div style="flex:1;"></div>
             <button onclick="cancelChatSpeech('${chatId}')" class="speech-cancel-btn"><i class="ph-bold ph-x"></i></button>
-            <button id="speech-send-btn-${chatId}" class="speech-send-btn hidden" onclick="sendSpeechText('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
+            <button onclick="stopAndSendVoiceMsg('${chatId}','${uid}')" class="speech-send-btn"><i class="ph-bold ph-paper-plane-tilt"></i></button>
         </div>
     `;
 
@@ -1331,16 +1353,13 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
         const imgHtml = imgs.map(src => `<img src="${src}" onclick="openImageViewer(this.src)" style="width:100%;height:100%;object-fit:cover;cursor:pointer;">`).join('');
         content = `<div class="wapp-msg"><div class="wapp-img-grid grid-${grid}">${imgHtml}</div>${buildMsgFooter(msg, isMe)}</div>`;
     } else if (msg.type === 'voice') {
+        const mime = msg.mimeType || 'audio/webm';
         content = `<div class="wapp-msg">
             <div class="wapp-voice-player">
                 <button class="voice-play-btn" onclick="toggleVoicePlay(this,'${msg._key}')"><i class="ph-bold ph-play"></i></button>
                 <div class="voice-waveform">${generateWaveform()}</div>
                 <span class="voice-duration">${msg.duration || '0:00'}</span>
-                <audio id="audio-${msg._key}" preload="metadata" onended="resetVoiceBtn('${msg._key}')">
-                    <source src="${msg.text}" type="audio/webm">
-                    <source src="${msg.text}" type="audio/ogg">
-                    <source src="${msg.text}" type="audio/mpeg">
-                </audio>
+                <audio id="audio-${msg._key}" preload="none" onended="resetVoiceBtn('${msg._key}')" src="${msg.text}"></audio>
             </div>
             ${buildMsgFooter(msg, isMe)}
         </div>`;
@@ -1400,7 +1419,7 @@ window.resetVoiceBtn = (key) => {
     if (btn) btn.innerHTML = '<i class="ph-bold ph-play"></i>';
 };
 
-
+function showMsgContextMenu(e, msgKey, chatId, otherUid, text, isMe) {
     document.querySelectorAll('.msg-ctx-menu').forEach(el => el.remove());
     const menu = document.createElement('div');
     menu.className = 'msg-ctx-menu';
