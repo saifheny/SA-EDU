@@ -61,6 +61,11 @@
     </script>
 </head>
 <body>
+<script>
+function goToAuth(){var l=document.getElementById('landing-layer'),a=document.getElementById('auth-layer');if(l)l.classList.add('hidden');if(a)a.classList.remove('hidden');}
+function backToLanding(){var l=document.getElementById('landing-layer'),a=document.getElementById('auth-layer');if(a)a.classList.add('hidden');if(l)l.classList.remove('hidden');}
+function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=document.getElementById('btn-role-teacher');if(s)s.classList.toggle('active',r==='student');if(t)t.classList.toggle('active',r==='teacher');}
+</script>
     <audio id="snd-click" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
     <audio id="snd-sent" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" preload="auto"></audio>
     <audio id="snd-recv" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
@@ -822,6 +827,7 @@
         </div>
     </div>
 
+    <!-- Audio Permission Gate -->
     <div id="voice-audio-gate" class="vr-gate">
         <div class="vr-gate-card">
             <button class="vr-gate-close" onclick="closeVoiceGate()"><i class="ph-bold ph-x"></i></button>
@@ -838,6 +844,7 @@
         </div>
     </div>
 
+    <!-- Active Voice Room Full Screen -->
     <div id="voice-room-screen" class="vr-room-screen">
         <div class="vr-room-bg"></div>
 
@@ -854,6 +861,7 @@
 
         <div id="voice-users-grid" class="vr-users-grid"></div>
 
+        <!-- Filters popup -->
         <div id="vr-filter-menu" class="vr-filter-menu">
             <div class="vr-filter-opt active" onclick="voiceApplyFilter('none', this)"><i class="ph-bold ph-wave-sawtooth"></i><span>عادي</span></div>
             <div class="vr-filter-opt" onclick="voiceApplyFilter('deep', this)"><i class="ph-bold ph-equalizer"></i><span>عميق</span></div>
@@ -861,6 +869,7 @@
             <div class="vr-filter-opt" onclick="voiceApplyFilter('robot', this)"><i class="ph-bold ph-robot"></i><span>روبوت</span></div>
         </div>
 
+        <!-- Dock -->
         <div class="vr-dock-wrap">
             <div class="vr-dock">
                 <button id="vr-mic-btn" class="vr-dock-btn active" onclick="voiceToggleMic()" title="كتم/تشغيل">
@@ -875,6 +884,7 @@
             </div>
         </div>
     </div>
+    <!-- ============ END VOICE ROOMS ============ -->
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
