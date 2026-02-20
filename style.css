@@ -1855,7 +1855,6 @@ text-overflow: ellipsis;
 animation: none;
 }
 
-/* AI section must be a positioned container for its absolute-positioned ai-layout child */
 #s-ai, #t-ai {
 position: relative !important;
 height: calc(100vh - var(--nav-height) - 15px);
@@ -2084,7 +2083,6 @@ color: var(--accent-gold);
 font-weight: bold;
 font-size: 0.9rem;
 }
-
 
 .chat-msg-wrap.user { align-items: flex-end; }
 .chat-msg-wrap.ai { align-items: flex-start; }
@@ -3467,10 +3465,6 @@ transform: translateX(0) translateY(0);
 }
 }
 
-
-/* =============================================
-   PWA GORGEOUS BANNER
-============================================= */
 #pwa-install-banner {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -3584,9 +3578,6 @@ transform: translateX(0) translateY(0);
 .pwa-btn-sub { font-size: 0.68rem; color: rgba(255,255,255,0.6); }
 .pwa-btn-arrow { font-size: 1.1rem; color: rgba(255,255,255,0.5); }
 
-/* =============================================
-   PROFILE PREVIEW LAYER
-============================================= */
 #profile-preview-layer {
   position: fixed; inset: 0; z-index: 10000;
   background: #000;
@@ -3648,9 +3639,6 @@ transform: translateX(0) translateY(0);
   display: flex; align-items: center; justify-content: center; gap: 8px;
 }
 
-/* =============================================
-   DAFTAR SECTION
-============================================= */
 .mobile-spacer-sm { height: 16px; width: 100%; display: block; }
 .daftar-section { padding-bottom: 80px; }
 .daftar-header {
@@ -3733,14 +3721,10 @@ transform: translateX(0) translateY(0);
 .daftar-empty p { margin: 0 0 4px; font-size: 1rem; color: #555; }
 .daftar-empty small { font-size: 0.8rem; color: #333; }
 
-/* nav icon color */
 .daftar-btn i { color: #f59e0b !important; }
 .daftar-btn.active i { color: #f59e0b !important; }
 .daftar-btn.active { background: rgba(245,158,11,0.08) !important; }
 
-/* =============================================
-   DAFTAR EDITOR OVERLAY
-============================================= */
 .daftar-editor-overlay {
   position: fixed; inset: 0; z-index: 7000;
   display: flex; flex-direction: column;
@@ -3842,7 +3826,6 @@ transform: translateX(0) translateY(0);
 .ded-nav-btn:active { background: rgba(255,255,255,0.15); color: #fff; }
 .ded-page-ind { color: #666; font-size: 0.85rem; }
 
-/* Image resize handles */
 .img-resize-wrap {
   display: inline-block; position: relative;
   max-width: 100%; margin: 10px auto;
