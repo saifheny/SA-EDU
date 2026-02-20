@@ -301,7 +301,8 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </button>
             </section>
 
-            
+
+            <!-- DAFTAR SMART NOTES - TEACHER -->
             <section id="t-daftar" class="app-section hidden daftar-section">
                 <div class="mobile-spacer-sm"></div>
                 <div class="daftar-header">
@@ -487,7 +488,8 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="s-grades-list"></div>
             </section>
 
-            
+
+            <!-- DAFTAR SMART NOTES - STUDENT -->
             <section id="s-daftar" class="app-section hidden daftar-section">
                 <div class="mobile-spacer-sm"></div>
                 <div class="daftar-header">
@@ -773,7 +775,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         </div>
     </div>
 
-    
+    <!-- GORGEOUS PWA BANNER -->
     <div id="pwa-install-banner">
         <div class="pwa-orb pwa-orb-1"></div>
         <div class="pwa-orb pwa-orb-2"></div>
@@ -809,7 +811,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         </div>
     </div>
 
-    
+    <!-- PROFILE PREVIEW (before login when ?chat=UID) -->
     <div id="profile-preview-layer" class="hidden">
         <div class="pp-bg-grad"></div>
         <div class="pp-card-outer">
@@ -992,9 +994,9 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
 
-    
+    <!-- DAFTAR FULL EDITOR MODAL -->
     <div id="daftar-editor-modal" class="daftar-editor-overlay hidden">
-        
+        <!-- TOP BAR -->
         <div class="ded-topbar">
             <button class="ded-topbar-btn back" onclick="closeDaftarEditor()">
                 <i class="fas fa-arrow-right"></i>
@@ -1013,7 +1015,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             </div>
         </div>
 
-        
+        <!-- FORMATTING TOOLBAR -->
         <div class="ded-toolbar" id="ded-toolbar">
             <button class="ded-tb-btn" onclick="ded_cmd('bold')" title="عريض"><i class="fas fa-bold"></i></button>
             <button class="ded-tb-btn" onclick="ded_cmd('italic')" title="مائل"><i class="fas fa-italic"></i></button>
@@ -1038,12 +1040,12 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <input type="file" id="daftar-img-input" hidden accept="image/*" onchange="daftarHandleImage(this)">
         </div>
 
-        
+        <!-- PAGES CONTAINER -->
         <div class="ded-pages-scroll" id="ded-pages-scroll">
-            
+            <!-- pages injected by JS -->
         </div>
 
-        
+        <!-- PAGE NAV -->
         <div class="ded-page-nav">
             <button class="ded-nav-btn" onclick="daftarPrevPage()"><i class="fas fa-chevron-right"></i></button>
             <span id="ded-page-indicator" class="ded-page-ind">1 / 1</span>
