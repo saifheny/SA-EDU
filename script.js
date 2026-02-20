@@ -38,15 +38,23 @@ let _swipeStartY = 0;
 let _swipeStartTarget = null;
 
 let lastScrollTop = 0;
-window.addEventListener("scroll", function() {
-    let st = window.pageYOffset || document.documentElement.scrollTop;
-    if (st > lastScrollTop && st > 10){
-        document.querySelector('.top-nav').classList.add('nav-hidden');
-    } else {
-        document.querySelector('.top-nav').classList.remove('nav-hidden');
+function handleNavScroll(st) {
+    const nav = document.querySelector('.top-nav');
+    if (!nav) return;
+    if (st > lastScrollTop && st > 60) {
+        nav.classList.add('nav-hidden');
+    } else if (st < lastScrollTop - 5) {
+        nav.classList.remove('nav-hidden');
     }
     lastScrollTop = st <= 0 ? 0 : st;
-}, false);
+}
+window.addEventListener('scroll', () => handleNavScroll(window.pageYOffset || document.documentElement.scrollTop), { passive: true });
+document.addEventListener('scroll', (e) => {
+    const t = e.target;
+    if (t && t.nodeType === 1 && t.classList && (t.classList.contains('app-section') || t.classList.contains('chat-msgs-area') || t.classList.contains('feed-container'))) {
+        handleNavScroll(t.scrollTop);
+    }
+}, true);
 
 window.addEventListener('popstate', (e) => {
     if (!currentUser) return;
@@ -98,59 +106,38 @@ function initKeyboardFix() {
 }
 
 function initSwipeNavigation(portalId) {
-    const portal = document.getElementById(portalId);
-    if (!portal) return;
-    
-    portal.addEventListener('touchstart', (e) => {
-        _swipeStartX = e.touches[0].clientX;
-        _swipeStartY = e.touches[0].clientY;
-        _swipeStartTarget = e.target;
+    let startX = 0, startY = 0, startTarget = null, startTime = 0;
+    const THRESHOLD = 55;
+
+    document.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        startTarget = e.target;
+        startTime = Date.now();
     }, { passive: true });
-    
-    portal.addEventListener('touchend', (e) => {
-        if (_swipeStartTarget && (
-            _swipeStartTarget.closest('.chat-window') ||
-            _swipeStartTarget.closest('.chat-sidebar') ||
-            _swipeStartTarget.closest('input') ||
-            _swipeStartTarget.closest('textarea') ||
-            _swipeStartTarget.closest('.full-screen-overlay') ||
-            _swipeStartTarget.closest('.ai-messages') ||
-            _swipeStartTarget.closest('.mini-call-bar') ||
-            _swipeStartTarget.closest('#voice-room-screen') ||
-            _swipeStartTarget.closest('#call-ui')
-        )) return;
-        
-        const dx = e.changedTouches[0].clientX - _swipeStartX;
-        const dy = e.changedTouches[0].clientY - _swipeStartY;
-        
-        if (Math.abs(dx) < 70 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
-        
+
+    document.addEventListener('touchend', (e) => {
+        if (document.getElementById('call-ui') || document.getElementById('voice-room-screen')?.classList.contains('open')) return;
+        if (startTarget?.closest('input,textarea,.msg-ctx-menu,.vr-panel,.voice-audio-gate,#ai-history-sidebar')) return;
+
+        const dx = e.changedTouches[0].clientX - startX;
+        const dy = e.changedTouches[0].clientY - startY;
+        const dt = Date.now() - startTime;
+
+        if (Math.abs(dx) < THRESHOLD || Math.abs(dy) > Math.abs(dx) * 0.8 || dt > 500) return;
+
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-        const currentHash = window.location.hash.replace('#', '');
+        const currentHash = window.location.hash.replace('#','');
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
-        
-        const newIdx = dx > 0 ? idx + 1 : idx - 1;
-        
-        if (newIdx >= 0 && newIdx < tabs.length) {
-            const navBtns = document.querySelectorAll(`#${portalId} .nav-btn`);
-            const direction = dx > 0 ? 'left' : 'right';
-            switchTabWithDirection(tabs[newIdx], navBtns[newIdx], direction);
-        }
-    }, { passive: true });
-}
 
-function switchTabWithDirection(tabId, btn, direction) {
-    const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-    const section = document.getElementById(tabId);
-    if (!section) return;
-    
-    switchTab(tabId, btn);
-    
-    section.classList.add(direction === 'right' ? 'section-enter' : 'section-enter-left');
-    setTimeout(() => {
-        section.classList.remove('section-enter', 'section-enter-left');
-    }, 300);
+        const newIdx = dx < 0 ? idx + 1 : idx - 1;
+        if (newIdx < 0 || newIdx >= tabs.length) return;
+
+        const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
+        const navBtns = document.querySelectorAll(`#${portal} .nav-btn`);
+        switchTab(tabs[newIdx], navBtns[newIdx]);
+    }, { passive: true });
 }
 
 function updateTabDots(activeTabId) {
@@ -472,12 +459,20 @@ function loginSuccess(name, icon, uid) {
     initVoiceModule(db, currentUser, myUid);
     initGlobalCallListener();
     initKeyboardFix();
-    
     handleDeepLinksAndRouting();
-    
     showTabDots();
     const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
-    updateTabDots(window.location.hash.replace('#', '') || defaultTab);
+    _currentTabId = window.location.hash.replace('#','') || defaultTab;
+    updateTabDots(_currentTabId);
+    if (selectedRole === 'student') {
+        setTimeout(() => {
+            startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
+            triggerAIAnalysisBadge();
+        }, 600);
+        setTimeout(() => renderXPHud(), 300);
+    }
+    if (selectedRole === 'teacher') startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان');
+    checkOnboarding();
 }
 
 function updateOGMeta(title, description, imageUrl) {
@@ -773,54 +768,67 @@ function startTypewriter(elementId, text) {
 }
 if(document.getElementById('landing-type-text')) { startTypewriter("landing-type-text", "منصة تعليمية ذكية تنقلك إلى آفاق المستقبل"); }
 
+let _currentTabId = null;
+
 window.switchTab = (tabId, btn) => {
     playSound('click');
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-    document.querySelectorAll(`#${portal} .app-section`).forEach(s => s.classList.add('hidden'));
-    document.getElementById(tabId).classList.remove('hidden');
-    if(btn) { 
-        document.querySelectorAll(`#${portal} .nav-btn`).forEach(b => b.classList.remove('active')); 
-        btn.classList.add('active'); 
+    const allSections = document.querySelectorAll(`#${portal} .app-section`);
+    const newSection = document.getElementById(tabId);
+    if (!newSection || newSection === document.getElementById(_currentTabId)) return;
+
+    const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
+    const oldIdx = tabs.indexOf(_currentTabId);
+    const newIdx = tabs.indexOf(tabId);
+    const direction = newIdx > oldIdx ? 'right' : 'left';
+
+    const oldSection = document.getElementById(_currentTabId);
+    if (oldSection && oldSection !== newSection) {
+        oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
+        void oldSection.offsetWidth;
+        oldSection.classList.add(direction === 'right' ? 'page-exit-left' : 'page-exit-right');
+        setTimeout(() => {
+            oldSection.classList.add('hidden');
+            oldSection.classList.remove('page-exit-right','page-exit-left');
+        }, 320);
     }
-    
+
+    newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
+    void newSection.offsetWidth;
+    newSection.classList.add(direction === 'right' ? 'page-enter-right' : 'page-enter-left');
+    setTimeout(() => newSection.classList.remove('page-enter-right','page-enter-left'), 350);
+
+    _currentTabId = tabId;
+
+    if (btn) {
+        document.querySelectorAll(`#${portal} .nav-btn`).forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
     if (!_suppressHistoryPush) {
-        const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-        if (allTabs.includes(tabId)) {
+        if (tabs.includes(tabId)) {
             window.history.pushState({ tab: tabId }, '', '#' + tabId);
         }
     }
-    
+
     updateTabDots(tabId);
-    
-    if(tabId === 's-grades') loadStudentGrades();
-    if(tabId === 's-exams') {
+
+    if (tabId === 's-grades') loadStudentGrades();
+    if (tabId === 's-exams') {
         loadStudentExams();
-        startTypewriter("student-type-text", "تحليل المستوى الدراسي");
+        startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
         if (selectedRole === 'student') setTimeout(() => renderXPHud(), 200);
     }
-    if(tabId === 't-library') {
+    if (tabId === 't-library') {
         loadTeacherTests();
-        startTypewriter("cta-type-text", "اضغط هنا لكتابة الامتحان");
+        startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان');
     }
-    if(tabId === 't-reese' || tabId === 's-reese') {
+    if (tabId === 't-reese' || tabId === 's-reese') {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
         loadReesePosts(prefix);
     }
-    if(tabId === 't-ai' && !currentChatId) startNewChat('t');
-    if(tabId === 's-ai' && !currentChatId) startNewChat('s');
-    
-    setTimeout(() => {
-        const aiInput = document.getElementById(`${tabId.charAt(0)}-ai-input`);
-        if (aiInput) {
-            aiInput.addEventListener('focus', () => {
-                if (window.innerWidth < 768) {
-                    setTimeout(() => {
-                        aiInput.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                    }, 350);
-                }
-            });
-        }
-    }, 100);
+    if (tabId === 't-ai' && !currentChatId) startNewChat('t');
+    if (tabId === 's-ai' && !currentChatId) startNewChat('s');
 };
 
 function initDardasha() {
@@ -1121,7 +1129,7 @@ function showIncomingCallUI(fromName, fromIcon, fromUid, chatPartnerId) {
 window.acceptPeerCall = async (fromUid) => {
     stopRingtone();
     try {
-        _peerCallStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        _peerCallStream = await getMicStream();
     } catch(e) {
         saAlert('لا يمكن الوصول للمايكروفون', 'error');
         rejectPeerCall(fromUid);
@@ -1217,6 +1225,97 @@ function stopRingtone() {
         try { _ringtoneOsc.osc.stop(); _ringtoneOsc.ctx.close(); } catch(e) {}
         _ringtoneOsc = null;
     }
+}
+
+let _micStream = null;
+async function getMicStream() {
+    if (_micStream && _micStream.active) return _micStream;
+    _micStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+    });
+    return _micStream;
+}
+window.getMicStream = getMicStream;
+
+function triggerAIAnalysisBadge() {
+    const el = document.getElementById('student-type-text');
+    if (!el) return;
+    const badge = document.createElement('span');
+    badge.className = 'ai-badge-pulse';
+    badge.innerHTML = ' <i class="fas fa-robot"></i>';
+    badge.title = 'تحليل ذكي بواسطة AI';
+    el.parentElement?.appendChild(badge);
+}
+
+function checkOnboarding() {
+    const key = `sa_onboarded_${selectedRole}`;
+    if (localStorage.getItem(key)) return;
+    setTimeout(() => startOnboardingTour(), 800);
+}
+
+function startOnboardingTour() {
+    const role = selectedRole;
+    const steps = role === 'student' ? [
+        { target: 's-exams-list', icon: '📚', title: 'الاختبارات', text: 'هنا بتلاقي كل الاختبارات اللي رفعها المعلمين. ادخل واحد وحل!' },
+        { target: 'xp-hud', icon: '⚡', title: 'نقاط XP', text: 'كل اختبار بتعمله بيكسبك XP وبتتدرج في المستويات. وصّل للقمة!' },
+        { target: 's-reese-btn', icon: '✍️', title: 'Reese', text: 'شارك أفكارك ومذاكرتك مع باقي الطلاب في مجتمع Reese.' },
+        { target: 's-dardasha-btn', icon: '💬', title: 'الدردشة', text: 'تكلم مع زملائك ومعلميك مباشرة. وفيه غرف صوتية كمان!' },
+        { target: 's-ai-btn', icon: '🤖', title: 'AI المساعد', text: 'المساعد الذكي بيحلل مستواك ويساعدك في المذاكرة 24/7.' },
+    ] : [
+        { target: 't-library', icon: '📖', title: 'المكتبة', text: 'كل اختباراتك هنا. ضغط + لإنشاء اختبار جديد في ثواني.' },
+        { target: 't-reese', icon: '✍️', title: 'Reese', text: 'انشر إعلانات وملاحظات للطلاب بسهولة.' },
+        { target: 't-dardasha', icon: '💬', title: 'الدردشة', text: 'تواصل مع طلابك ومعلمين آخرين مباشرة.' },
+        { target: 't-ai', icon: '🤖', title: 'AI', text: 'المساعد الذكي بيساعدك في إنشاء أسئلة وتحليل نتائج الطلاب.' },
+    ];
+
+    let currentStep = 0;
+    const overlay = document.createElement('div');
+    overlay.id = 'onboard-overlay';
+    overlay.className = 'onboard-overlay';
+
+    const card = document.createElement('div');
+    card.className = 'onboard-card';
+
+    function render(i) {
+        const s = steps[i];
+        card.innerHTML = `
+            <div class="onboard-icon">${s.icon}</div>
+            <div class="onboard-title">${s.title}</div>
+            <div class="onboard-text">${s.text}</div>
+            <div class="onboard-dots">
+                ${steps.map((_, j) => `<div class="onboard-dot ${j===i?'active':''}"></div>`).join('')}
+            </div>
+            <div class="onboard-actions">
+                <button class="onboard-skip" onclick="finishOnboarding()">تخطي</button>
+                <button class="onboard-next" onclick="nextOnboardStep(${i+1},${steps.length})">
+                    ${i === steps.length-1 ? 'ابدأ! 🚀' : 'التالي →'}
+                </button>
+            </div>
+        `;
+    }
+
+    window.nextOnboardStep = (i, total) => {
+        if (i >= total) { finishOnboarding(); return; }
+        currentStep = i;
+        card.classList.remove('onboard-card-in');
+        void card.offsetWidth;
+        card.classList.add('onboard-card-in');
+        render(i);
+    };
+
+    window.finishOnboarding = () => {
+        overlay.classList.remove('onboard-show');
+        setTimeout(() => overlay.remove(), 400);
+        localStorage.setItem(`sa_onboarded_${selectedRole}`, '1');
+    };
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    render(0);
+    requestAnimationFrame(() => {
+        overlay.classList.add('onboard-show');
+        card.classList.add('onboard-card-in');
+    });
 }
 
 function initGlobalCallListener() {
