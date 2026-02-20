@@ -803,7 +803,7 @@ window.switchTab = (tabId, btn) => {
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const isAI = tabId.endsWith('-ai');
 
-    // Hide ALL sections of this portal immediately - no overlap
+    // Hide ALL sections immediately – no overlap
     const protectedIds = ['s-taking-test', 's-review-test'];
     document.querySelectorAll(`#${portal} .app-section`).forEach(s => {
         if (!protectedIds.includes(s.id)) {
@@ -811,8 +811,6 @@ window.switchTab = (tabId, btn) => {
             s.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
         }
     });
-
-    // Scroll to top
     window.scrollTo({ top: 0, behavior: 'instant' });
 
     // Show new section
@@ -1192,38 +1190,57 @@ async function startActualCall(otherUid, roomId, isCaller) {
 }
 
 function showActiveCallUI(roomId, otherUid) {
-    document.getElementById('mini-call-bar')?.remove();
-    const mini = document.createElement('div');
-    mini.id = 'mini-call-bar';
-    mini.className = 'mini-call-bar';
-    mini.innerHTML = `
-        <div class="mini-call-left">
+    document.getElementById('mini-call-fab')?.remove();
+    const fab = document.createElement('div');
+    fab.id = 'mini-call-fab';
+    fab.className = 'mini-call-fab';
+    fab.innerHTML = `
+        <div class="mini-call-fab-inner" onclick="expandVoiceRoom()">
             <span class="mini-live-dot"></span>
-            <span class="mini-call-label">مكالمة جارية</span>
+            <i class="ph-bold ph-phone" style="font-size:1.3rem;color:#fff;"></i>
         </div>
-        <button class="mini-call-btn expand" onclick="expandVoiceRoom()" title="فتح المكالمة">
-            <i class="ph-bold ph-arrows-out"></i>
-        </button>
-        <button class="mini-call-btn end" onclick="endPeerCall('${otherUid}')" title="إنهاء">
+        <button class="mini-call-fab-end" onclick="endPeerCall('${otherUid}')" title="إنهاء">
             <i class="ph-bold ph-phone-disconnect"></i>
         </button>
     `;
-    document.body.appendChild(mini);
-    requestAnimationFrame(() => mini.classList.add('visible'));
+    // Make draggable
+    makeDraggable(fab);
+    document.body.appendChild(fab);
+    requestAnimationFrame(() => fab.classList.add('visible'));
+}
+
+function makeDraggable(el) {
+    let startY, startTop, startRight, dragging = false;
+    el.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.mini-call-fab-end')) return;
+        startY = e.touches[0].clientY;
+        const rect = el.getBoundingClientRect();
+        startTop = rect.top;
+        startRight = window.innerWidth - rect.right;
+        dragging = false;
+    }, { passive: true });
+    el.addEventListener('touchmove', (e) => {
+        const dy = e.touches[0].clientY - startY;
+        if (Math.abs(dy) > 5) dragging = true;
+        if (!dragging) return;
+        const newTop = Math.max(60, Math.min(window.innerHeight - 120, startTop + dy));
+        el.style.top = newTop + 'px';
+        el.style.bottom = 'auto';
+    }, { passive: true });
 }
 
 window.expandVoiceRoom = () => {
     const screen = document.getElementById('voice-room-screen');
     if (screen) screen.classList.add('open');
-    const bar = document.getElementById('mini-call-bar');
-    if (bar) bar.style.display = 'none';
+    const fab = document.getElementById('mini-call-fab');
+    if (fab) fab.style.display = 'none';
 };
 
 window.minimizeVoiceRoom = () => {
     const screen = document.getElementById('voice-room-screen');
     if (screen) screen.classList.remove('open');
-    const bar = document.getElementById('mini-call-bar');
-    if (bar) { bar.style.display = ''; bar.classList.add('visible'); }
+    const fab = document.getElementById('mini-call-fab');
+    if (fab) { fab.style.display = ''; fab.classList.add('visible'); }
 };
 
 window.endPeerCall = async (otherUid) => {
@@ -1237,6 +1254,7 @@ window.endPeerCall = async (otherUid) => {
 
 function removeCallUI() {
     document.getElementById('call-ui')?.remove();
+    document.getElementById('mini-call-fab')?.remove();
     document.getElementById('mini-call-bar')?.remove();
 }
 
@@ -1515,9 +1533,9 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
                 const aud = document.createElement('audio');
                 aud.id = `audio-${audioKey}`;
                 aud.preload = 'metadata';
-                aud.controls = false;
                 aud.style.display = 'none';
                 aud.onended = () => resetVoiceBtn(audioKey);
+                aud.onerror = () => resetVoiceBtn(audioKey);
                 aud.src = audioStore;
                 playerEl.appendChild(aud);
             }
@@ -1562,27 +1580,31 @@ function generateWaveform() {
 window.toggleVoicePlay = (btn, key) => {
     let audio = document.getElementById(`audio-${key}`);
     if (!audio) {
-        // Audio element not ready yet, retry once after short delay
+        // Not ready yet, retry
         setTimeout(() => window.toggleVoicePlay(btn, key), 150);
         return;
     }
     if (audio.paused) {
-        document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
-        document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
+        // Pause all others
+        document.querySelectorAll('audio[id^="audio-"]').forEach(a => {
+            if (a !== audio) { try { a.pause(); a.currentTime = 0; } catch(e){} }
+        });
+        document.querySelectorAll('.voice-play-btn').forEach(b => {
+            if (b !== btn) b.innerHTML = '<i class="ph-bold ph-play"></i>';
+        });
+        // Load if needed
+        if (audio.readyState === 0) audio.load();
         const playPromise = audio.play();
         if (playPromise !== undefined) {
             playPromise.then(() => {
                 btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-            }).catch(err => {
-                // Try loading then playing again
+            }).catch(() => {
                 audio.load();
                 setTimeout(() => {
                     audio.play().then(() => {
                         btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-                    }).catch(() => {
-                        btn.innerHTML = '<i class="ph-bold ph-play"></i>';
-                    });
-                }, 100);
+                    }).catch(() => { btn.innerHTML = '<i class="ph-bold ph-play"></i>'; });
+                }, 200);
             });
         } else {
             btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
@@ -1796,22 +1818,75 @@ async function loadReeseAiSuggestionsAuto() {
 
     const prompt = `أنت مساعد منصة SA EDU التعليمية. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح يجب أن يكون في فئة مختلفة: ${categories.join(', ')}. المنشورات تكون طبيعية وواقعية ومميزة وغير رسمية. ${prevStr}. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف. لا تكتب أي شيء آخر.`;
 
-    try {
-        let text = await callPollinationsAI(prompt);
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const first = text.indexOf('[');
-        const last = text.lastIndexOf(']');
-        if (first !== -1 && last !== -1) text = text.substring(first, last + 1);
-        let suggestions = [];
-        try { suggestions = JSON.parse(text); } catch(e) { suggestions = [text]; }
-        if (!Array.isArray(suggestions)) suggestions = [text];
+    // Fallback suggestion pools
+    const fallbackStudent = [
+        ['🔥 المذاكرة صعبة؟ الحل: فترات قصيرة وراحة كافية. جرب تقنية بومودورو!',
+         '💡 أفضل وقت للمذاكرة هو الصباح الباكر، جربها هتلاقي فرق كبير!',
+         '🎯 حل 3 امتحانات قديمة أفضل من قراءة الكتاب مرتين كاملتين.',
+         '✨ مذاكرت اليوم وفرت لي وقت كتير، الاستثمار الحقيقي في نفسك!'],
+        ['📚 كل يوم درس جديد = خطوة للأمام. الثبات أقوى من الاجتهاد المتقطع!',
+         '⚡ مراجعة سريعة قبل النوم = معلومات تترسخ في ذاكرتك طول الليل!',
+         '🏆 انا أخدت الدرجة النهارده! التعب بيستاهل دايماً 💪',
+         '🌙 الليلة خصصت ساعتين للمراجعة ومحتاج حد يشجعني!'],
+        ['🤔 سؤال للجميع: إيه أصعب مادة عليكم وليه؟',
+         '📝 لو عندك نصيحة للمذاكرة، شاركها دلوقتي!',
+         '🌟 أهم حاجة في النجاح: الاستمرارية مش الموهبة!',
+         '🎓 الامتحانات قربت.. شاركوا جداول مذاكرتكم!'],
+    ];
+    const fallbackTeacher = [
+        ['💡 نصيحة للطلاب: اكتبوا الأسئلة اللي مش فاهموها وراجعوها مع المعلم.',
+         '🎯 أسلوب التعليم بالقصص يثبت المعلومات أسرع من الشرح التقليدي!',
+         '🏫 تذكروا: كل سؤال غبي أفضل من معلومة غلط في الامتحان!',
+         '✨ طالب مجتهد يحتاج فرصة، ليس فقط شرحاً. أعطوهم فرص للتطبيق!'],
+        ['📚 الحصة الأفضل هي اللي الطالب يخرج منها متحمس يكمل بنفسه.',
+         '⚡ سؤال تفاعلي في بداية الحصة يفتح عقول الطلاب ويشدّ انتباههم.',
+         '🔥 التشجيع أقوى درس يمكن تعلمه، لا تقتصد فيه مع طلابك!',
+         '🌟 مشاركة إنجازات طلابك مع الأهل تبني ثقة لا تُقدر بثمن.'],
+    ];
 
-        suggestions = suggestions.filter(s => typeof s === 'string' && s.trim().length > 5);
+    const pool = selectedRole === 'teacher' ? fallbackTeacher : fallbackStudent;
+    // Pick a random pool different from last used
+    let poolIdx = Math.floor(Math.random() * pool.length);
+    if (_lastReesePoolIdx === poolIdx && pool.length > 1) poolIdx = (poolIdx + 1) % pool.length;
+    _lastReesePoolIdx = poolIdx;
+
+    try {
+        const ctrl = new AbortController();
+        const timeout = setTimeout(() => ctrl.abort(), 8000);
+        let text = '';
+        try {
+            const r = await fetch('https://text.pollinations.ai/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: [{role:'user',content:prompt}], model: 'openai', private: true, seed: Math.floor(Math.random()*99999) }),
+                signal: ctrl.signal
+            });
+            clearTimeout(timeout);
+            if (r.ok) text = await r.text();
+        } catch(fetchErr) { clearTimeout(timeout); }
+
+        let suggestions = [];
+        if (text && text.length > 10) {
+            text = text.replace(/```json|```/g, '').trim();
+            const first = text.indexOf('['), last = text.lastIndexOf(']');
+            if (first !== -1 && last !== -1) {
+                try {
+                    const parsed = JSON.parse(text.substring(first, last+1));
+                    if (Array.isArray(parsed)) suggestions = parsed.filter(s => typeof s === 'string' && s.trim().length > 5);
+                } catch(e) {}
+            }
+        }
+
+        // Use fallback if AI failed or returned nothing
+        if (suggestions.length < 3) suggestions = [...pool[poolIdx]];
+
+        // Shuffle for variety
+        suggestions = suggestions.sort(() => Math.random() - 0.5);
         _lastReeseSuggestions = suggestions.slice(0, 4);
 
         container.innerHTML = '';
         const catIcons = ['✨', '💡', '🔥', '🎯'];
-        suggestions.slice(0, 4).forEach((sug, i) => {
+        _lastReeseSuggestions.forEach((sug, i) => {
             const chip = document.createElement('div');
             chip.className = 'suggestion-chip';
             chip.innerHTML = `<span style="font-size:1rem;">${catIcons[i] || '✨'}</span> ${sug}`;
@@ -1822,7 +1897,20 @@ async function loadReeseAiSuggestionsAuto() {
             container.appendChild(chip);
         });
     } catch(e) {
-        container.innerHTML = '<div class="suggestion-chip" style="opacity:0.5; pointer-events:none;"><i class="fas fa-wifi-slash"></i> تعذر تحميل الاقتراحات</div>';
+        // Always show fallback on error
+        const fallback = pool[poolIdx];
+        container.innerHTML = '';
+        const catIcons = ['✨', '💡', '🔥', '🎯'];
+        fallback.forEach((sug, i) => {
+            const chip = document.createElement('div');
+            chip.className = 'suggestion-chip';
+            chip.innerHTML = `<span style="font-size:1rem;">${catIcons[i]}</span> ${sug}`;
+            chip.onclick = () => {
+                document.getElementById('reese-text-input').value = sug;
+                document.getElementById('reese-text-input').focus();
+            };
+            container.appendChild(chip);
+        });
     }
 }
 
@@ -1918,6 +2006,27 @@ window.loadReesePosts = (prefix) => {
                     <button class="reese-btn ${isLiked ? 'liked' : ''}" onclick="likeReese('${post.id}', ${post.likes || 0})"><i class="fas ${isLiked ? 'fa-thumbs-up' : 'fa-thumbs-up'}" style="font-size:1.3rem;"></i> <span style="font-size:1.1rem;">${post.likes || 0}</span></button>
                     <button class="reese-btn" onclick="shareReese('${post.id}')"><i class="fas fa-share"></i> مشاركة</button>
                 </div>`;
+            // Double-tap to like
+            let lastTap = 0;
+            div.addEventListener('touchend', (e) => {
+                const now = Date.now();
+                if (now - lastTap < 350) {
+                    // Double tap - find the like button and click it
+                    const likeBtn = div.querySelector('.reese-btn');
+                    if (likeBtn) {
+                        // Show heart burst
+                        const heart = document.createElement('div');
+                        heart.innerHTML = '❤️';
+                        heart.style.cssText = `position:absolute;font-size:3rem;pointer-events:none;animation:heartBurst 0.8s ease forwards;z-index:99;left:50%;top:50%;transform:translate(-50%,-50%);`;
+                        div.style.position = 'relative';
+                        div.appendChild(heart);
+                        setTimeout(() => heart.remove(), 800);
+                        likeReese(post.id, post.likes || 0);
+                    }
+                }
+                lastTap = now;
+            }, { passive: true });
+
             container.appendChild(div); container.appendChild(createAdBanner());
         });
         if(visibleCount === 0) container.innerHTML = getEmptyStateHTML('posts');
@@ -2640,38 +2749,160 @@ window.saveAns = (i, v) => answers[i] = v;
 window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفقد تقدمك.", () => { clearInterval(timerInt); timerInt = null; activeTest = null; answers = {}; document.getElementById('s-taking-test').classList.add('hidden'); }); };
 
 window.submitExam = async () => {
-    playSound('success');
-    clearInterval(timerInt); let score = 0, total = 0, details = [];
+    clearInterval(timerInt);
     const questions = activeTest.questions || [];
+    let score = 0, total = 0, details = [];
+    let essayAnswers = [];
+
+    // Score MCQ instantly; collect essays
     questions.forEach((q, i) => {
-        const pts = parseInt(q.points) || 1; 
-        total += pts; 
-        
-        let isCorrect = false;
+        const pts = parseInt(q.points) || 1;
+        total += pts;
         if (q.type === 'essay') {
-            if (answers[i] && answers[i].trim().length > 2) {
-                isCorrect = true; 
-                score += pts;
-            }
+            const userAns = (answers[i] || '').trim();
+            details.push({ q: q.text, image: q.image||null, user: userAns, correct: '', isCorrect: false, type: 'essay', pts });
+            if (userAns.length > 2) essayAnswers.push({ idx: details.length - 1, question: q.text, userAns, pts });
         } else {
-            isCorrect = answers[i] === q.correct;
-            if(isCorrect) score += pts; 
+            const isCorrect = answers[i] === q.correct;
+            if (isCorrect) score += pts;
+            details.push({ q: q.text, image: q.image||null, user: answers[i]||'-', correct: q.correct, isCorrect, type: 'mcq' });
         }
-        
-        details.push({ 
-            q: q.text, 
-            image: q.image || null, 
-            user: answers[i]||'-', 
-            correct: q.correct, 
-            isCorrect,
-            type: q.type || 'mcq'
-        });
     });
+
+    // Show loading screen for essay grading
+    const takingScreen = document.getElementById('s-taking-test');
+    if (essayAnswers.length > 0) {
+        takingScreen.innerHTML = `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;text-align:center;padding:40px;">
+                <div style="width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;animation:logoPulse 1.5s infinite;">
+                    <i class="fas fa-brain" style="font-size:2rem;color:#fff;"></i>
+                </div>
+                <h2 style="margin:0;font-size:1.3rem;">جاري تقييم إجاباتك المقالية</h2>
+                <p style="color:#666;margin:0;">الذكاء الاصطناعي يقرأ ويحلل إجاباتك...</p>
+                <div class="analytics-loading-spin"></div>
+            </div>`;
+        // AI grade each essay
+        for (const ea of essayAnswers) {
+            try {
+                const prompt = `أنت معلم خبير. قيّم هذه الإجابة المقالية من طالب:
+السؤال: ${ea.question}
+إجابة الطالب: ${ea.userAns}
+أعطِ: (1) درجة من 10 للإجابة (2) جملة تقييم موجزة (3) الإجابة النموذجية في جملتين.
+أجب بـ JSON فقط بهذا الشكل: {"score":7,"feedback":"تقييم موجز","model":"الإجابة النموذجية"}`;
+                let txt = await callPollinationsAI([{role:'user',content:prompt}]);
+                txt = txt.replace(/```json|```/g,'').trim();
+                const first = txt.indexOf('{'), last = txt.lastIndexOf('}');
+                if (first !== -1 && last !== -1) txt = txt.substring(first, last+1);
+                const res = JSON.parse(txt);
+                const aiScore = Math.round((parseFloat(res.score)||0)/10 * ea.pts);
+                score += aiScore;
+                details[ea.idx].isCorrect = aiScore >= ea.pts * 0.6;
+                details[ea.idx].correct = res.model || '';
+                details[ea.idx].aiFeedback = res.feedback || '';
+                details[ea.idx].aiScore = aiScore;
+            } catch(e) {
+                // Partial credit if answered
+                const partial = Math.round(ea.pts * 0.5);
+                score += partial;
+                details[ea.idx].isCorrect = true;
+                details[ea.idx].aiScore = partial;
+            }
+        }
+    }
+
     const pct = total === 0 ? 0 : Math.round((score/total)*100);
-    await set(ref(db, `results/${activeTest.id}/${currentUser}`), { score, total, percentage: pct, timestamp: Date.now(), details });
-    saAlert(`تم التسليم! النتيجة التقريبية: ${pct}%`, "success");
-    document.getElementById('s-taking-test').classList.add('hidden'); loadStudentExams(); loadStudentGrades(); 
+
+    // Only save FIRST attempt
+    const existingSnap = await get(ref(db, `results/${activeTest.id}/${currentUser}`)).catch(()=>null);
+    if (!existingSnap || !existingSnap.exists()) {
+        await set(ref(db, `results/${activeTest.id}/${currentUser}`), { score, total, percentage: pct, timestamp: Date.now(), details });
+    }
+
+    playSound('success');
+    takingScreen.classList.add('hidden');
+    loadStudentExams(); loadStudentGrades();
+    showExamResultsScreen(pct, score, total, details, activeTest.title);
+
+    // Award XP
+    const startTime = window._examStartTime || Date.now();
+    const durationMs = (activeTest ? activeTest.duration * 60 * 1000 : 999999999);
+    const elapsed = Date.now() - startTime;
+    const fast = elapsed < durationMs * 0.5;
+    const allCorrect = total > 0 && score === total;
+    const correctCount = details.filter(d => d.isCorrect).length;
+    const baseXP = Math.max(10, Math.round((score / Math.max(total, 1)) * 50));
+    awardXP(baseXP, '🎓 إتمام اختبار', { allCorrect, fast, examCompleted: true, correctCount });
+    renderXPHud();
 };
+
+function showExamResultsScreen(pct, score, total, details, examTitle) {
+    let screen = document.getElementById('sa-exam-results-screen');
+    if (!screen) {
+        screen = document.createElement('div');
+        screen.id = 'sa-exam-results-screen';
+        screen.style.cssText = 'position:fixed;inset:0;background:#000;z-index:3500;overflow-y:auto;padding:20px;';
+        document.body.appendChild(screen);
+    }
+    screen.classList.remove('hidden');
+
+    const iconClass = localStorage.getItem('sa_icon') || 'fa-user-astronaut';
+    const levelColor = pct >= 90 ? 'var(--accent-gold)' : pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--accent-primary)' : 'var(--danger)';
+    const msg = pct >= 90 ? '🏆 أداء رائع! أنت نجم!' : pct >= 75 ? '🎉 ممتاز! استمر هكذا!' : pct >= 50 ? '👍 جيد! يمكنك التحسين' : '💪 لا تستسلم، حاول مرة أخرى!';
+
+    const wrongDetails = details.filter(d => !d.isCorrect && d.type !== 'essay');
+    const essayDetails = details.filter(d => d.type === 'essay');
+
+    let wrongHtml = '';
+    wrongDetails.forEach((d, i) => {
+        wrongHtml += `
+        <div style="background:#111;border-radius:16px;padding:14px;margin-bottom:10px;border-right:4px solid var(--danger);">
+            <p style="margin:0 0 6px;font-weight:700;font-size:0.9rem;">${d.q}</p>
+            <div style="font-size:0.85rem;color:#888;">إجابتك: <span style="color:var(--danger);">${d.user}</span></div>
+            <div style="font-size:0.85rem;color:var(--success);margin-top:4px;">الصحيحة: ${d.correct}</div>
+        </div>`;
+    });
+
+    let essayHtml = '';
+    essayDetails.forEach((d) => {
+        essayHtml += `
+        <div style="background:#111;border-radius:16px;padding:14px;margin-bottom:10px;border-right:4px solid var(--accent-primary);">
+            <p style="margin:0 0 6px;font-weight:700;font-size:0.9rem;">${d.q}</p>
+            <div style="font-size:0.85rem;color:#aaa;">إجابتك: <span style="color:#fff;">${d.user||'-'}</span></div>
+            ${d.aiFeedback ? `<div style="font-size:0.82rem;color:var(--accent-primary);margin-top:6px;background:rgba(59,130,246,0.08);padding:8px;border-radius:8px;"><i class="fas fa-robot" style="margin-left:4px;"></i>${d.aiFeedback}</div>` : ''}
+            ${d.correct ? `<div style="font-size:0.82rem;color:#888;margin-top:4px;">النموذجية: ${d.correct}</div>` : ''}
+        </div>`;
+    });
+
+    screen.innerHTML = `
+        <div style="max-width:600px;margin:0 auto;padding-bottom:60px;">
+            <div style="text-align:center;padding:40px 20px 30px;">
+                <div style="width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#1a1a2e,#16213e);border:3px solid ${levelColor};margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;animation:rewardPop 0.5s ease;box-shadow:0 0 30px ${levelColor}55;">
+                    <i class="fas ${iconClass}" style="color:${levelColor};"></i>
+                </div>
+                <div style="font-size:3.5rem;font-weight:900;color:${levelColor};line-height:1;">${pct}%</div>
+                <div style="font-size:1rem;color:#888;margin-top:4px;">${score} / ${total} درجة</div>
+                <div style="font-size:1.3rem;font-weight:700;margin-top:12px;">${msg}</div>
+                <div style="font-size:0.85rem;color:#666;margin-top:6px;">${examTitle}</div>
+            </div>
+
+            ${wrongDetails.length > 0 ? `
+            <div style="background:#0a0a0a;border-radius:20px;padding:16px;margin-bottom:16px;">
+                <h3 style="margin:0 0 12px;font-size:1rem;color:var(--danger);"><i class="fas fa-times-circle" style="margin-left:6px;"></i> أسئلة أخطأت فيها (${wrongDetails.length})</h3>
+                ${wrongHtml}
+            </div>` : '<div style="text-align:center;padding:20px;font-size:1.5rem;">✅ أجبت على كل الاختياريات صح!</div>'}
+
+            ${essayDetails.length > 0 ? `
+            <div style="background:#0a0a0a;border-radius:20px;padding:16px;margin-bottom:16px;">
+                <h3 style="margin:0 0 12px;font-size:1rem;color:var(--accent-primary);"><i class="fas fa-robot" style="margin-left:6px;"></i> تقييم المقالي بالذكاء الاصطناعي</h3>
+                ${essayHtml}
+            </div>` : ''}
+
+            <button onclick="document.getElementById('sa-exam-results-screen').classList.add('hidden');" class="modern-btn" style="margin-top:10px;">
+                <i class="fas fa-home" style="margin-left:8px;"></i> العودة للرئيسية
+            </button>
+        </div>
+    `;
+}
 
 window.reviewTest = async (id) => {
     playSound('click');
@@ -3287,40 +3518,9 @@ window.openLeaderboard = async () => {
     if (entries.length === 0) list.innerHTML = '<p style="color:#666; text-align:center;">لا يوجد بيانات كافية بعد</p>';
 };
 
-const _origSubmitExam = window.submitExam;
-window.submitExam = async function() {
-    const startTime = window._examStartTime || Date.now();
-    const durationMs = (activeTest ? activeTest.duration * 60 * 1000 : 999999999);
-    const elapsed = Date.now() - startTime;
-    const fast = elapsed < durationMs * 0.5;
+// XP is now awarded inside submitExam directly - no override needed
+// Keep startTest override only
 
-    let score = 0, total = 0;
-    const questions = activeTest ? activeTest.questions || [] : [];
-    questions.forEach((q, i) => {
-        const pts = parseInt(q.points) || 1;
-        total += pts;
-        if (q.type === 'essay') { if (answers[i] && answers[i].trim().length > 2) score += pts; }
-        else { if (answers[i] === q.correct) score += pts; }
-    });
-    const allCorrect = total > 0 && score === total;
-    const correctCount = questions.filter((q, i) => {
-        if (q.type === 'essay') return answers[i] && answers[i].trim().length > 2;
-        return answers[i] === q.correct;
-    }).length;
-    const baseXP = Math.max(10, Math.round((score / Math.max(total, 1)) * 50));
-
-    await _origSubmitExam.call(this);
-
-    const xpData = getXPData();
-    const streakMultiplier = xpData.streak >= 3 ? 1.5 : 1;
-    awardXP(baseXP, '🎓 إتمام اختبار', {
-        allCorrect,
-        fast,
-        examCompleted: true,
-        correctCount,
-    });
-    renderXPHud();
-};
 
 const _origStartTest = window.startTest;
 window.startTest = async function(id) {
