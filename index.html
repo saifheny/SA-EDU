@@ -798,10 +798,8 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
     }
     </script>
 
-    <!-- ============ VOICE ROOMS SYSTEM ============ -->
     <div id="voice-audio-container" style="display:none;"></div>
 
-    <!-- Voice Rooms List Panel -->
     <div class="vr-panel-backdrop" onclick="closeVoiceRooms()"></div>
     <div id="voice-rooms-panel" class="vr-panel">
         <div class="vr-panel-handle"></div>
@@ -827,7 +825,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         </div>
     </div>
 
-    <!-- Audio Permission Gate -->
     <div id="voice-audio-gate" class="vr-gate">
         <div class="vr-gate-card">
             <button class="vr-gate-close" onclick="closeVoiceGate()"><i class="ph-bold ph-x"></i></button>
@@ -844,7 +841,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         </div>
     </div>
 
-    <!-- Active Voice Room Full Screen -->
     <div id="voice-room-screen" class="vr-room-screen">
         <div class="vr-room-bg"></div>
 
@@ -861,7 +857,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
 
         <div id="voice-users-grid" class="vr-users-grid"></div>
 
-        <!-- Filters popup -->
         <div id="vr-filter-menu" class="vr-filter-menu">
             <div class="vr-filter-opt active" onclick="voiceApplyFilter('none', this)"><i class="ph-bold ph-wave-sawtooth"></i><span>عادي</span></div>
             <div class="vr-filter-opt" onclick="voiceApplyFilter('deep', this)"><i class="ph-bold ph-equalizer"></i><span>عميق</span></div>
@@ -869,7 +864,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <div class="vr-filter-opt" onclick="voiceApplyFilter('robot', this)"><i class="ph-bold ph-robot"></i><span>روبوت</span></div>
         </div>
 
-        <!-- Dock -->
         <div class="vr-dock-wrap">
             <div class="vr-dock">
                 <button id="vr-mic-btn" class="vr-dock-btn active" onclick="voiceToggleMic()" title="كتم/تشغيل">
@@ -887,8 +881,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             </div>
         </div>
     </div>
-    <!-- ============ END VOICE ROOMS ============ -->
-
+    
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
 </body>
