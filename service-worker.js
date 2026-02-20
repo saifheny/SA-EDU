@@ -1,4 +1,3 @@
-javascript
 const CACHE_NAME = 'sa-edu-cache-v1';
 const ASSETS_TO_CACHE = [
   './',
