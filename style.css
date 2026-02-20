@@ -1172,8 +1172,9 @@ position: absolute;
 bottom: 0;
 left: 0;
 right: 0;
+z-index: 20;
 background: linear-gradient(to top, rgba(0,0,0,1) 70%, transparent);
-padding: 12px 14px 20px;
+padding: 12px 14px max(20px, env(safe-area-inset-bottom, 20px));
 }
 .gemini-input-container {
 background: #0d0d0d;
@@ -1855,7 +1856,7 @@ text-overflow: ellipsis;
 animation: none;
 }
 
-/* AI section must be a positioned container for its absolute-positioned ai-layout child */
+/* AI section - fixed fullscreen, above everything */
 #s-ai, #t-ai {
 position: fixed !important;
 top: var(--nav-height);
@@ -3248,60 +3249,63 @@ transition: 0.2s;
 .call-btn.end { background: #ef4444; color: #fff; box-shadow: 0 0 20px rgba(239,68,68,0.4); }
 .call-btn:active { transform: scale(0.92); }
 
-.mini-call-bar {
-position: fixed;
-bottom: calc(var(--nav-height) + 12px);
-left: 50%;
-transform: translateX(-50%) translateY(20px);
-background: #0a1a0f;
-border: 1.5px solid #10b981;
-border-radius: 999px;
-padding: 8px 14px 8px 12px;
-display: flex;
-align-items: center;
-gap: 10px;
-z-index: 18000;
-box-shadow: 0 4px 24px rgba(16,185,129,0.35);
-opacity: 0;
-transition: opacity 0.25s, transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
-white-space: nowrap;
-}
-.mini-call-bar.visible {
-opacity: 1;
-transform: translateX(-50%) translateY(0);
-}
-.mini-call-left {
-display: flex;
-align-items: center;
-gap: 7px;
-color: #10b981;
-font-size: 0.8rem;
-font-weight: 700;
-}
-.mini-call-label { color: #10b981; }
+.mini-call-bar { display: none; }
 .mini-live-dot {
-width: 8px;
-height: 8px;
-background: #10b981;
-border-radius: 50%;
-animation: pulse 1s infinite;
-flex-shrink: 0;
+width: 8px; height: 8px;
+background: #10b981; border-radius: 50%;
+animation: pulse 1s infinite; flex-shrink: 0;
 }
-.mini-call-btn {
-width: 30px;
-height: 30px;
-border-radius: 50%;
-border: none;
+
+/* Floating call FAB */
+.mini-call-fab {
+position: fixed;
+right: 16px;
+top: 50%;
+transform: translateY(-50%) scale(0.6);
+z-index: 18000;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 6px;
+opacity: 0;
+transition: opacity 0.3s, transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+touch-action: none;
 cursor: pointer;
+}
+.mini-call-fab.visible {
+opacity: 1;
+transform: translateY(-50%) scale(1);
+}
+.mini-call-fab-inner {
+width: 58px; height: 58px;
+border-radius: 50%;
+background: linear-gradient(135deg, #10b981, #059669);
+border: 2px solid #34d399;
 display: flex;
 align-items: center;
 justify-content: center;
+gap: 4px;
+box-shadow: 0 4px 24px rgba(16,185,129,0.5), 0 0 0 0 rgba(16,185,129,0.4);
+animation: callFabPulse 2s infinite;
+flex-direction: column;
+}
+@keyframes callFabPulse {
+0%,100% { box-shadow: 0 4px 24px rgba(16,185,129,0.5), 0 0 0 0 rgba(16,185,129,0.4); }
+50% { box-shadow: 0 4px 30px rgba(16,185,129,0.7), 0 0 0 10px rgba(16,185,129,0); }
+}
+.mini-call-fab-end {
+width: 36px; height: 36px;
+border-radius: 50%;
+background: #ef4444;
+border: none;
+color: #fff;
+display: flex; align-items: center; justify-content: center;
 font-size: 0.85rem;
+cursor: pointer;
+box-shadow: 0 2px 10px rgba(239,68,68,0.4);
 transition: transform 0.15s;
 }
-.mini-call-btn:active { transform: scale(0.9); }
-.mini-call-btn.expand { background: rgba(16,185,129,0.15); color: #10b981; }
-.mini-call-btn.end { background: #ef4444; color: #fff; }
+.mini-call-fab-end:active { transform: scale(0.9); }
 
 #inapp-notif-container {
 position: fixed;
@@ -3461,14 +3465,22 @@ flex: 1;
 .onboard-next:active { transform: scale(0.97); }
 
 @media (min-width: 768px) {
-.mini-call-bar {
-bottom: 20px;
-left: unset;
+.mini-call-fab {
 right: 24px;
-transform: translateX(0) translateY(20px);
-min-width: 220px;
 }
-.mini-call-bar.visible {
-transform: translateX(0) translateY(0);
 }
+
+
+/* Double-tap heart burst */
+@keyframes heartBurst {
+0% { opacity:1; transform:translate(-50%,-50%) scale(0.5); }
+50% { opacity:1; transform:translate(-50%,-60%) scale(1.4); }
+100% { opacity:0; transform:translate(-50%,-80%) scale(1.2); }
+}
+
+/* Exam results screen */
+@keyframes rewardPop {
+0% { transform: scale(0.5); opacity:0; }
+70% { transform: scale(1.1); }
+100% { transform: scale(1); opacity:1; }
 }
