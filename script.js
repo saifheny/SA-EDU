@@ -567,12 +567,12 @@ async function handleDeepLinks() {
 
     if (postId) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
-        const postSnap = await get(ref(db, `reese_posts/${postId}`));
+        const postSnap = await get(ref(db, `posts/${postId}`));
         if (postSnap.exists()) {
             const pd = postSnap.val();
             updateOGMeta(
                 `منشور من ${pd.author || 'مستخدم'} على Reese`,
-                pd.text?.substring(0, 160) || 'منشور على منصة SA EDU',
+                (pd.content || pd.text || '').substring(0, 160) || 'منشور على منصة SA EDU',
                 pd.images?.[0] || pd.image || null
             );
         }
@@ -728,14 +728,22 @@ window.saveProfileName = async () => {
     playSound('click');
     const newName = document.getElementById('edit-name-input').value.trim();
     if(!newName || newName === currentUser) return;
-    saConfirm("تغيير الاسم سيؤدي لإنشاء حساب جديد. هل أنت متأكد؟", async () => {
-        const oldRef = ref(db, `users/${selectedRole}s/${currentUser}`);
-        const snapshot = await get(oldRef);
-        const data = snapshot.val();
-        await set(ref(db, `users/${selectedRole}s/${newName}`), data);
-        await remove(oldRef);
-        currentUser = newName; localStorage.setItem('sa_user', newName);
-        updateMenuInfo(); saAlert("تم تغيير الاسم بنجاح", "success"); toggleEditProfile();
+    saConfirm("تغيير الاسم؟ هيتم نقل بياناتك للاسم الجديد.", async () => {
+        try {
+            const oldRef = ref(db, `users/${selectedRole}s/${currentUser}`);
+            const snapshot = await get(oldRef);
+            const data = snapshot.val();
+            // Preserve UID when moving to new name
+            await set(ref(db, `users/${selectedRole}s/${newName}`), data);
+            await remove(oldRef);
+            currentUser = newName; 
+            localStorage.setItem('sa_user', newName);
+            updateMenuInfo(); 
+            saAlert("تم تغيير الاسم بنجاح", "success"); 
+            toggleEditProfile();
+        } catch(e) {
+            saAlert("فشل في تغيير الاسم", "error");
+        }
     });
 };
 
@@ -779,6 +787,13 @@ if(document.getElementById('landing-type-text')) { startTypewriter("landing-type
 
 let _currentTabId = null;
 
+// Firebase listener unsubscribe trackers - prevent duplicate listeners
+let _reeseListener = null;
+let _testsListener = null;
+let _dardashaListener = null;
+let _chatRoomListener = null;
+let _studentExamsListener = null;
+let _studentGradesListener = null;
 window.switchTab = (tabId, btn) => {
     playSound('click');
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
@@ -839,8 +854,9 @@ function initDardasha() {
     const prefix = selectedRole === 'teacher' ? 't' : 's';
     const list = document.getElementById(`${prefix}-chat-list`);
     list.innerHTML = getMultipleSkeletons(2);
-
-    onValue(ref(db, `user_chats/${myUid}`), (snap) => {
+    if (_dardashaListener) { _dardashaListener(); _dardashaListener = null; }
+    if (!myUid) { list.innerHTML = getEmptyStateHTML('chats'); return; }
+    _dardashaListener = onValue(ref(db, `user_chats/${myUid}`), (snap) => {
         list.innerHTML = '';
         if (!snap.exists()) {
             list.innerHTML = getEmptyStateHTML('chats');
@@ -922,20 +938,25 @@ window.searchUserById = async (forcedId = null) => {
     let foundUser = null;
     let foundRole = '';
     
-    const sSnap = await get(ref(db, `users/students`));
-    if(sSnap.exists()) {
-        Object.entries(sSnap.val()).forEach(([name, data]) => {
-            if(data.uid == id) { foundUser = {name, ...data}; foundRole = 'student'; }
-        });
-    }
-    
-    if(!foundUser) {
-        const tSnap = await get(ref(db, `users/teachers`));
-        if(tSnap.exists()) {
-            Object.entries(tSnap.val()).forEach(([name, data]) => {
-                if(data.uid == id) { foundUser = {name, ...data}; foundRole = 'teacher'; }
+    try {
+        const sSnap = await get(ref(db, `users/students`));
+        if(sSnap.exists()) {
+            Object.entries(sSnap.val()).forEach(([name, data]) => {
+                if(data && data.uid && String(data.uid) === String(id)) { foundUser = {name, ...data}; foundRole = 'student'; }
             });
         }
+        
+        if(!foundUser) {
+            const tSnap = await get(ref(db, `users/teachers`));
+            if(tSnap.exists()) {
+                Object.entries(tSnap.val()).forEach(([name, data]) => {
+                    if(data && data.uid && String(data.uid) === String(id)) { foundUser = {name, ...data}; foundRole = 'teacher'; }
+                });
+            }
+        }
+    } catch(e) {
+        if(!forcedId) resultDiv.innerHTML = '<p style="color:var(--danger); text-align:center;">خطأ في البحث</p>';
+        return;
     }
     
     if(foundUser) {
@@ -1323,6 +1344,7 @@ function startOnboardingTour() {
 }
 
 function initGlobalCallListener() {
+    if (!myUid) return;
     onValue(ref(db, `call_requests/${myUid}`), (snap) => {
         if (!snap.exists()) return;
         const req = snap.val();
@@ -1361,6 +1383,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
     playSound('click');
     activeChatRoomId = chatId;
     _activeChatMsgKeys = {};
+    if (_chatRoomListener) { _chatRoomListener(); _chatRoomListener = null; }
     const prefix = selectedRole === 'teacher' ? 't' : 's';
     const win = document.getElementById(`${prefix}-chat-window`);
 
@@ -1412,7 +1435,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
     let isFirstLoad = true;
     let prevCount = 0;
 
-    onValue(ref(db, `chats/${chatId}`), (snap) => {
+    _chatRoomListener = onValue(ref(db, `chats/${chatId}`), (snap) => {
         msgContainer.innerHTML = '';
         _activeChatMsgKeys = {};
         if (!snap.exists()) { isFirstLoad = false; return; }
@@ -1604,6 +1627,7 @@ window.sendChatImages = async (input, chatId, otherUid) => {
 
 window.closeChatWindow = (prefix) => {
     playSound('click');
+    if (_chatRoomListener) { _chatRoomListener(); _chatRoomListener = null; }
     document.getElementById(`${prefix}-chat-window`).classList.add('hidden');
     document.getElementById(`${prefix}-chat-sidebar`).classList.remove('hidden');
     activeChatRoomId = null;
@@ -1642,6 +1666,7 @@ window.sendChatMessage = async (chatId, otherUid) => {
     await update(ref(db, `user_chats/${otherUid}/${chatId}`), { lastMsg: text, lastMsgTime: Date.now() });
     
     input.value = '';
+    toggleChatMicSend(chatId);
 };
 
 window.sendChatImage = async (input, chatId, otherUid) => {
@@ -1684,21 +1709,18 @@ window.copyProfileLinkFor = async (otherUid) => {
         return;
     }
     const roomId = activeChatRoomId;
-    const myData = { username: currentUser };
-    const otherSnap = await get(ref(db, `users/students/${otherUid}`)).catch(() => null)
-        || await get(ref(db, `users/teachers/${otherUid}`)).catch(() => null);
-    const otherName = otherSnap?.val()?.username || 'مستخدم';
-    const otherIcon = otherSnap?.val()?.icon || 'fa-user';
+    const myIcon = localStorage.getItem('sa_icon') || 'fa-user';
 
+    // Save room meta using data already known from openChatRoom call
     await update(ref(db, `chat_room_meta/${roomId}`), {
         members: [myUid, otherUid],
-        names: { [myUid]: currentUser, [otherUid]: otherName },
-        icons: { [myUid]: localStorage.getItem('sa_icon') || 'fa-user', [otherUid]: otherIcon }
+        names: { [myUid]: currentUser },
+        icons: { [myUid]: myIcon }
     });
 
     const url = `${window.location.href.split('?')[0]}?room=${roomId}`;
     if (navigator.share) {
-        navigator.share({ title: `محادثة مع ${otherName}`, text: `افتح محادثتنا على SA EDU`, url }).catch(() => {});
+        navigator.share({ title: `محادثة على SA EDU`, text: `افتح محادثتنا على SA EDU`, url }).catch(() => {});
     } else {
         navigator.clipboard.writeText(url).then(() => saAlert("تم نسخ رابط الدردشة المباشر!", "success"));
     }
@@ -1834,7 +1856,8 @@ window.publishReese = async () => {
 window.loadReesePosts = (prefix) => {
     const container = document.getElementById(`reese-feed-container-${prefix}`);
     container.innerHTML = getMultipleSkeletons(3);
-    onValue(ref(db, 'posts'), (snap) => {
+    if (_reeseListener) { _reeseListener(); _reeseListener = null; }
+    _reeseListener = onValue(ref(db, 'posts'), (snap) => {
         container.innerHTML = '';
         const data = snap.val();
         if(!data) return container.innerHTML = getEmptyStateHTML('posts');
@@ -1893,11 +1916,20 @@ window.toggleMyPostsView = () => {
 };
 
 window.likeReese = async (id, currentLikes) => {
-    playSound('like');
+    playSound('click');
     const likedPosts = JSON.parse(localStorage.getItem(`liked_posts_${currentUser}`) || '[]');
     const index = likedPosts.indexOf(id);
-    let newLikes = currentLikes;
-    if(index === -1) { likedPosts.push(id); newLikes++; } else { likedPosts.splice(index, 1); newLikes--; }
+    const wasLiked = index !== -1;
+    
+    // Get fresh likes count from Firebase to avoid race conditions
+    let freshLikes = currentLikes;
+    try {
+        const snap = await get(ref(db, `posts/${id}/likes`));
+        if (snap.exists()) freshLikes = snap.val() || 0;
+    } catch(e) {}
+    
+    const newLikes = wasLiked ? Math.max(0, freshLikes - 1) : freshLikes + 1;
+    if(wasLiked) { likedPosts.splice(index, 1); } else { likedPosts.push(id); }
     localStorage.setItem(`liked_posts_${currentUser}`, JSON.stringify(likedPosts));
     await update(ref(db, `posts/${id}`), { likes: newLikes });
 };
@@ -1977,10 +2009,28 @@ window.renderAiWelcome = (prefix) => {
             <div class="ai-logo-large"><i class="fas fa-wand-magic-sparkles"></i></div>
             <h3 class="ai-welcome-title">مرحباً ${firstName} 👋</h3>
             <p class="ai-welcome-text">أنا مساعدك الذكي SA AI. <br>${roleDesc}</p>
-            <div class="ai-chips">
-                ${roleSpecificChips}
+            <div class="ai-chips" id="ai-welcome-chips-${prefix}">
             </div>
         </div>`;
+
+    // Add chips safely via JS to avoid quote escaping issues
+    const chipsContainer = document.getElementById(`ai-welcome-chips-${prefix}`);
+    const chipsData = selectedRole === 'teacher' ? [
+        { icon: 'fas fa-flask', text: 'أنشئ اختبار عن الكيمياء العضوية' },
+        { icon: 'fas fa-book', text: 'اكتب خطة درس عن التاريخ الحديث' },
+        { icon: 'fas fa-users', text: 'كيف أجعل الحصة تفاعلية أكثر؟' },
+    ] : [
+        { icon: 'fas fa-atom', text: 'اشرح لي قانون نيوتن الثاني ببساطة' },
+        { icon: 'fas fa-history', text: 'لخص لي أحداث الحرب العالمية الأولى' },
+        { icon: 'fas fa-clock', text: 'ساعدني في تنظيم وقت المذاكرة' },
+    ];
+    chipsData.forEach(c => {
+        const chip = document.createElement('div');
+        chip.className = 'ai-chip';
+        chip.innerHTML = `<i class="${c.icon}"></i> ${c.text}`;
+        chip.addEventListener('click', () => fillAiInput(prefix, c.text));
+        chipsContainer.appendChild(chip);
+    });
 };
 
 window.fillAiInput = (prefix, text) => {
@@ -2129,18 +2179,24 @@ function renderMessageUI(prefix, role, text, imgB64) {
     if (role === 'ai' && text) {
         const actions = document.createElement('div');
         actions.className = 'msg-ai-actions';
-        let liked = false;
         actions.innerHTML = `
             <button class="msg-action-btn like-btn" title="إعجاب" onclick="this.classList.toggle('liked'); this.querySelector('.like-count').innerText = this.classList.contains('liked') ? '1' : '0';">
                 <i class="ph-bold ph-thumbs-up"></i> <span class="like-count">0</span>
             </button>
-            <button class="msg-action-btn" title="مشاركة" onclick="(()=>{ if(navigator.share) navigator.share({text: \`${text.replace(/`/g,"'").substring(0,200)}\`}); else navigator.clipboard.writeText(\`${text.replace(/`/g,"'").substring(0,300)}\`).then(()=>showToast('تم النسخ','','success',2000)); })()">
-                <i class="ph-bold ph-share-network"></i>
-            </button>
-            <button class="msg-action-btn" title="نسخ" onclick="navigator.clipboard.writeText(\`${text.replace(/`/g,"'")}\`).then(()=>showToast('تم نسخ الرد','','success',2000))">
-                <i class="ph-bold ph-copy"></i>
-            </button>
+            <button class="msg-action-btn ai-share-btn" title="مشاركة"><i class="ph-bold ph-share-network"></i></button>
+            <button class="msg-action-btn ai-copy-btn" title="نسخ"><i class="ph-bold ph-copy"></i></button>
         `;
+        // Use dataset to avoid JS injection in inline handlers
+        const shareBtn = actions.querySelector('.ai-share-btn');
+        const copyBtn = actions.querySelector('.ai-copy-btn');
+        shareBtn.addEventListener('click', () => {
+            const snippet = text.substring(0, 200);
+            if(navigator.share) navigator.share({text: snippet}).catch(()=>{});
+            else navigator.clipboard.writeText(text).then(()=>showToast('تم النسخ','','success',2000));
+        });
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(text).then(()=>showToast('تم نسخ الرد','','success',2000));
+        });
         wrap.appendChild(actions);
     }
 
@@ -2152,7 +2208,8 @@ function loadTeacherTests() {
     const list = document.getElementById('t-tests-list');
     const resultSelect = document.getElementById('t-result-select');
     list.innerHTML = getMultipleSkeletons(3);
-    onValue(ref(db, 'tests'), (snap) => {
+    if (_testsListener) { _testsListener(); _testsListener = null; }
+    _testsListener = onValue(ref(db, 'tests'), (snap) => {
         list.innerHTML = ''; resultSelect.innerHTML = '<option>اختر الاختبار للعرض</option>';
         const data = snap.val() || {};
         let count = 0;
@@ -2444,7 +2501,8 @@ window.viewStudentDetails = async (testId, studentName) => {
 function loadStudentExams() {
     const list = document.getElementById('s-exams-list');
     list.innerHTML = getMultipleSkeletons(3);
-    onValue(ref(db, 'tests'), async (snap) => {
+    if (_studentExamsListener) { _studentExamsListener(); _studentExamsListener = null; }
+    _studentExamsListener = onValue(ref(db, 'tests'), async (snap) => {
         list.innerHTML = ''; const tests = snap.val();
         if (!tests) return list.innerHTML = getEmptyStateHTML('exams');
         let foundExam = false;
@@ -2537,7 +2595,11 @@ window.startTest = async (id) => {
                 inputHtml = `<textarea class="smart-input" style="min-height:80px; margin-top:10px;" placeholder="اكتب إجابتك هنا..." onchange="saveAns(${i}, this.value)"></textarea>`;
             } else {
                 if (!q.options) q.options = []; const shuffled = [...q.options].sort(() => Math.random() - 0.5);
-                inputHtml = shuffled.map(o => `<label class="mini-card" style="flex-direction:row; align-items:center; gap:10px; cursor:pointer; margin-bottom:8px; padding:12px;"><input type="radio" name="q${i}" value="${o}" onchange="saveAns(${i}, '${o}')"><span>${o}</span></label>`).join('');
+                inputHtml = shuffled.map((o, oi) => {
+                    const safeDisplay = String(o).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    const dataAttr = String(o).replace(/"/g, '&quot;');
+                    return `<label class="mini-card" style="flex-direction:row; align-items:center; gap:10px; cursor:pointer; margin-bottom:8px; padding:12px;"><input type="radio" name="q${i}" data-ans="${dataAttr}" onchange="saveAns(${i}, this.dataset.ans)"><span>${safeDisplay}</span></label>`;
+                }).join('');
             }
 
             div.innerHTML += `
@@ -2556,7 +2618,7 @@ window.startTest = async (id) => {
 };
 
 window.saveAns = (i, v) => answers[i] = v;
-window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفقد تقدمك.", () => { clearInterval(timerInt); document.getElementById('s-taking-test').classList.add('hidden'); }); };
+window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفقد تقدمك.", () => { clearInterval(timerInt); timerInt = null; activeTest = null; answers = {}; document.getElementById('s-taking-test').classList.add('hidden'); }); };
 
 window.submitExam = async () => {
     playSound('success');
