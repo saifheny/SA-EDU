@@ -123,10 +123,10 @@ window.voiceConfirmEntry = async () => {
         voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
         if (voiceAudioCtx.state === 'suspended') await voiceAudioCtx.resume();
 
-        voiceLocalStream = await navigator.mediaDevices.getUserMedia({
+        voiceLocalStream = await (window.getMicStream ? window.getMicStream() : navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
             video: false
-        });
+        }));
 
         voiceAudioSource = voiceAudioCtx.createMediaStreamSource(voiceLocalStream);
         voiceAudioDest   = voiceAudioCtx.createMediaStreamDestination();
