@@ -131,7 +131,7 @@ function initSwipeNavigation(portalId) {
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
 
-        const newIdx = dx < 0 ? idx + 1 : idx - 1;
+        const newIdx = dx > 0 ? idx + 1 : idx - 1;
         if (newIdx < 0 || newIdx >= tabs.length) return;
 
         const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
@@ -476,7 +476,6 @@ function loginSuccess(name, icon, uid) {
     if (selectedRole === 'student') {
         setTimeout(() => {
             startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
-            triggerAIAnalysisBadge();
         }, 600);
         setTimeout(() => renderXPHud(), 300);
     }
@@ -804,12 +803,17 @@ window.switchTab = (tabId, btn) => {
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const isAI = tabId.endsWith('-ai');
 
-    // Hide old section immediately - no overlap
-    const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
-    if (oldSection) {
-        oldSection.classList.add('hidden');
-        oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-    }
+    // Hide ALL sections of this portal immediately - no overlap
+    const protectedIds = ['s-taking-test', 's-review-test'];
+    document.querySelectorAll(`#${portal} .app-section`).forEach(s => {
+        if (!protectedIds.includes(s.id)) {
+            s.classList.add('hidden');
+            s.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
+        }
+    });
+
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'instant' });
 
     // Show new section
     newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
@@ -1012,9 +1016,13 @@ window.startChatSpeech = async (chatId, otherUid) => {
             ? 'audio/webm;codecs=opus'
             : MediaRecorder.isTypeSupported('audio/webm')
             ? 'audio/webm'
-            : 'audio/ogg';
+            : MediaRecorder.isTypeSupported('audio/mp4')
+            ? 'audio/mp4'
+            : MediaRecorder.isTypeSupported('audio/ogg')
+            ? 'audio/ogg'
+            : '';
 
-        _voiceRec = new MediaRecorder(stream, { mimeType });
+        _voiceRec = new MediaRecorder(stream, mimeType ? { mimeType } : {});
         _voiceChunks = [];
         _voiceSeconds = 0;
         _voiceRecording = true;
@@ -1506,12 +1514,14 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
             if (playerEl && !playerEl.querySelector('audio')) {
                 const aud = document.createElement('audio');
                 aud.id = `audio-${audioKey}`;
-                aud.preload = 'none';
+                aud.preload = 'metadata';
+                aud.controls = false;
+                aud.style.display = 'none';
                 aud.onended = () => resetVoiceBtn(audioKey);
                 aud.src = audioStore;
                 playerEl.appendChild(aud);
             }
-        }, 100);
+        }, 50);
     } else {
         content = `<div class="wapp-msg"><div class="wapp-text">${makeLinksClickable(msg.text || '')}</div>${buildMsgFooter(msg, isMe)}</div>`;
     }
@@ -1550,8 +1560,12 @@ function generateWaveform() {
 }
 
 window.toggleVoicePlay = (btn, key) => {
-    const audio = document.getElementById(`audio-${key}`);
-    if (!audio) return;
+    let audio = document.getElementById(`audio-${key}`);
+    if (!audio) {
+        // Audio element not ready yet, retry once after short delay
+        setTimeout(() => window.toggleVoicePlay(btn, key), 150);
+        return;
+    }
     if (audio.paused) {
         document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
         document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
@@ -1560,10 +1574,15 @@ window.toggleVoicePlay = (btn, key) => {
             playPromise.then(() => {
                 btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
             }).catch(err => {
+                // Try loading then playing again
                 audio.load();
-                audio.play().then(() => {
-                    btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-                }).catch(() => {});
+                setTimeout(() => {
+                    audio.play().then(() => {
+                        btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+                    }).catch(() => {
+                        btn.innerHTML = '<i class="ph-bold ph-play"></i>';
+                    });
+                }, 100);
             });
         } else {
             btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
