@@ -350,15 +350,22 @@ async function recognizeImageText(imageBase64) {
     }
 }
 
-async function callPollinationsAI(prompt) {
-    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('API Error');
-        return await response.text();
-    } catch (error) {
-        console.error("AI Error:", error);
-        throw error;
+async function callPollinationsAI(messages) {
+    const tryFetch = async (model) => {
+        const r = await fetch('https://text.pollinations.ai/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages, model, private: true, seed: Math.floor(Math.random()*9999) })
+        });
+        if (!r.ok) throw new Error(r.status);
+        const txt = await r.text();
+        if (!txt || txt.trim().length === 0) throw new Error('empty');
+        return txt;
+    };
+    try { return await tryFetch('openai'); }
+    catch(e) {
+        try { return await tryFetch('mistral'); }
+        catch(e2) { throw new Error('فشل الاتصال بالذكاء الاصطناعي: ' + e2.message); }
     }
 }
 
@@ -773,30 +780,38 @@ let _currentTabId = null;
 window.switchTab = (tabId, btn) => {
     playSound('click');
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-    const allSections = document.querySelectorAll(`#${portal} .app-section`);
     const newSection = document.getElementById(tabId);
-    if (!newSection || newSection === document.getElementById(_currentTabId)) return;
+    if (!newSection) return;
+    if (_currentTabId && tabId === _currentTabId) return;
 
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const oldIdx = tabs.indexOf(_currentTabId);
     const newIdx = tabs.indexOf(tabId);
-    const direction = newIdx > oldIdx ? 'right' : 'left';
+    const isAI = tabId.endsWith('-ai');
+    const wasAI = (_currentTabId || '').endsWith('-ai');
 
-    const oldSection = document.getElementById(_currentTabId);
-    if (oldSection && oldSection !== newSection) {
-        oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-        void oldSection.offsetWidth;
-        oldSection.classList.add(direction === 'right' ? 'page-exit-left' : 'page-exit-right');
-        setTimeout(() => {
+    const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
+
+    if (oldSection) {
+        if (wasAI) {
             oldSection.classList.add('hidden');
-            oldSection.classList.remove('page-exit-right','page-exit-left');
-        }, 320);
+        } else {
+            oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left');
+            void oldSection.offsetWidth;
+            oldSection.classList.add(newIdx > oldIdx ? 'page-exit-left' : 'page-exit-right');
+            setTimeout(() => {
+                oldSection.classList.add('hidden');
+                oldSection.classList.remove('page-exit-right','page-exit-left');
+            }, 280);
+        }
     }
 
     newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-    void newSection.offsetWidth;
-    newSection.classList.add(direction === 'right' ? 'page-enter-right' : 'page-enter-left');
-    setTimeout(() => newSection.classList.remove('page-enter-right','page-enter-left'), 350);
+    if (!isAI) {
+        void newSection.offsetWidth;
+        newSection.classList.add(newIdx > oldIdx ? 'page-enter-right' : 'page-enter-left');
+        setTimeout(() => newSection.classList.remove('page-enter-right','page-enter-left'), 320);
+    }
 
     _currentTabId = tabId;
 
@@ -804,11 +819,8 @@ window.switchTab = (tabId, btn) => {
         document.querySelectorAll(`#${portal} .nav-btn`).forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
     }
-
-    if (!_suppressHistoryPush) {
-        if (tabs.includes(tabId)) {
-            window.history.pushState({ tab: tabId }, '', '#' + tabId);
-        }
+    if (!_suppressHistoryPush && tabs.includes(tabId)) {
+        window.history.pushState({ tab: tabId }, '', '#' + tabId);
     }
 
     updateTabDots(tabId);
@@ -819,16 +831,12 @@ window.switchTab = (tabId, btn) => {
         startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
         if (selectedRole === 'student') setTimeout(() => renderXPHud(), 200);
     }
-    if (tabId === 't-library') {
-        loadTeacherTests();
-        startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان');
+    if (tabId === 't-library') { loadTeacherTests(); startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان'); }
+    if (tabId === 't-reese' || tabId === 's-reese') loadReesePosts(selectedRole === 'teacher' ? 't' : 's');
+    if (tabId.endsWith('-ai')) {
+        const p = tabId.charAt(0);
+        if (!currentChatId) startNewChat(p);
     }
-    if (tabId === 't-reese' || tabId === 's-reese') {
-        const prefix = selectedRole === 'teacher' ? 't' : 's';
-        loadReesePosts(prefix);
-    }
-    if (tabId === 't-ai' && !currentChatId) startNewChat('t');
-    if (tabId === 's-ai' && !currentChatId) startNewChat('s');
 };
 
 function initDardasha() {
@@ -1464,16 +1472,27 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
         const imgHtml = imgs.map(src => `<img src="${src}" onclick="openImageViewer(this.src)" style="width:100%;height:100%;object-fit:cover;cursor:pointer;">`).join('');
         content = `<div class="wapp-msg"><div class="wapp-img-grid grid-${grid}">${imgHtml}</div>${buildMsgFooter(msg, isMe)}</div>`;
     } else if (msg.type === 'voice') {
-        const mime = msg.mimeType || 'audio/webm';
         content = `<div class="wapp-msg">
             <div class="wapp-voice-player">
                 <button class="voice-play-btn" onclick="toggleVoicePlay(this,'${msg._key}')"><i class="ph-bold ph-play"></i></button>
                 <div class="voice-waveform">${generateWaveform()}</div>
                 <span class="voice-duration">${msg.duration || '0:00'}</span>
-                <audio id="audio-${msg._key}" preload="none" onended="resetVoiceBtn('${msg._key}')" src="${msg.text}"></audio>
             </div>
             ${buildMsgFooter(msg, isMe)}
         </div>`;
+        const audioStore = msg.text;
+        const audioKey = msg._key;
+        setTimeout(() => {
+            const playerEl = document.querySelector(`#msg-wrap-${audioKey} .wapp-voice-player`);
+            if (playerEl && !playerEl.querySelector('audio')) {
+                const aud = document.createElement('audio');
+                aud.id = `audio-${audioKey}`;
+                aud.preload = 'none';
+                aud.onended = () => resetVoiceBtn(audioKey);
+                aud.src = audioStore;
+                playerEl.appendChild(aud);
+            }
+        }, 100);
     } else {
         content = `<div class="wapp-msg"><div class="wapp-text">${makeLinksClickable(msg.text || '')}</div>${buildMsgFooter(msg, isMe)}</div>`;
     }
@@ -2744,44 +2763,41 @@ window.sendAiMsg = async (prefix) => {
         }
     }
     
-    currentChatMessages.push({ role: 'user', content: txt, image: imgB64 });
+    currentChatMessages.push({ role: 'user', content: ocrText ? txt + '\n[صورة مرفقة: ' + ocrText + ']' : txt, image: imgB64 });
     renderMessageUI(prefix, 'user', txt, imgB64);
     input.value = '';
     window.toggleAiSendMic(prefix, '');
     saveChatToLocal();
-    
+
     const loadId = 'loading-' + Date.now();
     const loaderDiv = document.createElement('div');
-    loaderDiv.className = 'chat-msg ai'; 
-    loaderDiv.id = loadId; 
-    loaderDiv.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-    msgs.appendChild(loaderDiv); 
+    loaderDiv.className = 'chat-msg-wrap ai';
+    loaderDiv.id = loadId;
+    loaderDiv.innerHTML = '<div class="chat-msg ai"><span class="ai-typing-dot"></span><span class="ai-typing-dot"></span><span class="ai-typing-dot"></span></div>';
+    msgs.appendChild(loaderDiv);
     msgs.scrollTop = msgs.scrollHeight;
-    
-    try {
-        let finalPrompt = "";
-        
-        if(selectedRole === 'student') {
-            finalPrompt += `أنت مساعد دراسي ذكي اسمه SA AI للطلاب. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة والتحيات تحتاج ردود قصيرة (جملة أو اثنتان)، الأسئلة التفسيرية تحتاج شرح متوسط، والأسئلة المعقدة تحتاج إجابة مفصلة. لا تطول إذا السؤال لا يحتاج لذلك. `;
-        } else {
-            finalPrompt += `أنت مساعد معلمين ذكي اسمه SA AI. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة ردود قصيرة، والأسئلة التفصيلية ردود شاملة. `;
-        }
 
-        if (ocrText) {
-            finalPrompt += `Context from image: "${ocrText}". `;
-        }
-        finalPrompt += txt;
-        
-        const reply = await callPollinationsAI(finalPrompt);
-        
+    try {
+        const sysContent = selectedRole === 'student'
+            ? 'أنت SA AI مساعد دراسي ذكي. أجب بالعربية. اجعل إجابتك متناسبة مع السؤال: قصيرة للأسئلة البسيطة، مفصلة للمعقدة. استخدم **نص** للتمييز و- للقوائم.'
+            : 'أنت SA AI مساعد معلمين ذكي. أجب بالعربية. ساعد في إنشاء الاختبارات وتحضير الدروس وتحليل الطلاب. اجعل إجابتك متناسبة مع السؤال.';
+
+        const messages = [
+            { role: 'system', content: sysContent },
+            ...currentChatMessages.slice(-10).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content }))
+        ];
+
+        const reply = await callPollinationsAI(messages);
+
         playSound('recv');
-        document.getElementById(loadId).remove();
+        const loaderEl = document.getElementById(loadId);
+        if (loaderEl) loaderEl.remove();
         currentChatMessages.push({ role: 'ai', content: reply, image: null });
-        renderMessageUI(prefix, 'ai', reply, null); 
+        renderMessageUI(prefix, 'ai', reply, null);
         saveChatToLocal();
-    } catch (e) { 
-        document.getElementById(loadId).innerText = "حدث خطأ في الاتصال بالذكاء الاصطناعي."; 
-        console.error(e);
+    } catch (e) {
+        const loaderEl = document.getElementById(loadId);
+        if (loaderEl) loaderEl.innerHTML = '<div class="chat-msg ai" style="color:#ef4444;">⚠️ خطأ في الاتصال. تحقق من الإنترنت وحاول مرة أخرى.</div>';
     }
 };
 
