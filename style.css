@@ -1853,46 +1853,14 @@ text-overflow: ellipsis;
 }
 .app-section {
 animation: none;
-will-change: transform, opacity;
 }
 
-.app-section.page-exit-right {
-animation: pageExitRight 0.32s cubic-bezier(0.4,0,1,1) forwards;
-pointer-events: none;
-}
-.app-section.page-exit-left {
-animation: pageExitLeft 0.32s cubic-bezier(0.4,0,1,1) forwards;
-pointer-events: none;
-}
-.app-section.page-enter-right {
-animation: pageEnterRight 0.32s cubic-bezier(0,0,0.2,1) forwards;
-}
-.app-section.page-enter-left {
-animation: pageEnterLeft 0.32s cubic-bezier(0,0,0.2,1) forwards;
-}
-
-@keyframes pageExitRight {
-from { opacity:1; transform: translateX(0) scale(1); }
-to   { opacity:0; transform: translateX(60px) scale(0.97); }
-}
-@keyframes pageExitLeft {
-from { opacity:1; transform: translateX(0) scale(1); }
-to   { opacity:0; transform: translateX(-60px) scale(0.97); }
-}
-@keyframes pageEnterRight {
-from { opacity:0; transform: translateX(-60px) scale(0.97); }
-to   { opacity:1; transform: translateX(0) scale(1); }
-}
-@keyframes pageEnterLeft {
-from { opacity:0; transform: translateX(60px) scale(0.97); }
-to   { opacity:1; transform: translateX(0) scale(1); }
-}
-
-.app-section.section-enter {
-animation: pageEnterLeft 0.32s cubic-bezier(0,0,0.2,1) forwards;
-}
-.app-section.section-enter-left {
-animation: pageEnterRight 0.32s cubic-bezier(0,0,0.2,1) forwards;
+/* AI section must be a positioned container for its absolute-positioned ai-layout child */
+#s-ai, #t-ai {
+position: relative !important;
+height: calc(100vh - var(--nav-height) - 15px);
+padding: 0 !important;
+overflow: hidden;
 }
 .search-user-btn {
 background: linear-gradient(135deg, var(--accent-primary), #2563eb);
