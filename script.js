@@ -107,7 +107,7 @@ function initKeyboardFix() {
 
 function initSwipeNavigation(portalId) {
     let startX = 0, startY = 0, startTarget = null, startTime = 0;
-    const THRESHOLD = 55;
+    const THRESHOLD = 40;
 
     document.addEventListener('touchstart', (e) => {
         startX = e.touches[0].clientX;
@@ -118,13 +118,13 @@ function initSwipeNavigation(portalId) {
 
     document.addEventListener('touchend', (e) => {
         if (document.getElementById('call-ui') || document.getElementById('voice-room-screen')?.classList.contains('open')) return;
-        if (startTarget?.closest('input,textarea,.msg-ctx-menu,.vr-panel,.voice-audio-gate,#ai-history-sidebar')) return;
+        if (startTarget?.closest('input,textarea,.msg-ctx-menu,.vr-panel,#voice-audio-gate,#ai-history-sidebar')) return;
 
         const dx = e.changedTouches[0].clientX - startX;
         const dy = e.changedTouches[0].clientY - startY;
         const dt = Date.now() - startTime;
 
-        if (Math.abs(dx) < THRESHOLD || Math.abs(dy) > Math.abs(dx) * 0.8 || dt > 500) return;
+        if (Math.abs(dx) < THRESHOLD || Math.abs(dy) > Math.abs(dx) * 1.2 || dt > 800) return;
 
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
         const currentHash = window.location.hash.replace('#','');
@@ -441,11 +441,11 @@ function generateUID() {
 function loginSuccess(name, icon, uid) {
     playSound('success');
     currentUser = name;
-    myUid = uid;
+    myUid = uid || null;
     localStorage.setItem('sa_user', name);
     localStorage.setItem('sa_role', selectedRole);
     localStorage.setItem('sa_icon', icon || (selectedRole === 'student' ? 'fa-user-astronaut' : 'fa-user-tie'));
-    localStorage.setItem('sa_uid', uid);
+    if (uid) localStorage.setItem('sa_uid', uid);
     
     document.getElementById('landing-layer').classList.add('hidden');
     document.getElementById('auth-layer').classList.add('hidden');
@@ -461,6 +461,8 @@ function loginSuccess(name, icon, uid) {
         updateStreakOnLogin();
         setTimeout(() => renderXPHud(), 300);
         setTimeout(() => initSwipeNavigation('student-app'), 500);
+        // Initialize student AI welcome screen early
+        setTimeout(() => { if (!currentChatId) startNewChat('s'); }, 100);
     }
     initDardasha();
     initVoiceModule(db, currentUser, myUid);
@@ -793,7 +795,8 @@ window.switchTab = (tabId, btn) => {
     const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
 
     if (oldSection) {
-        if (wasAI) {
+        if (wasAI || (_currentTabId && _currentTabId.endsWith('-dardasha'))) {
+            // AI and chat sections: hide immediately (no exit animation)
             oldSection.classList.add('hidden');
         } else {
             oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left');
@@ -835,7 +838,19 @@ window.switchTab = (tabId, btn) => {
     if (tabId === 't-reese' || tabId === 's-reese') loadReesePosts(selectedRole === 'teacher' ? 't' : 's');
     if (tabId.endsWith('-ai')) {
         const p = tabId.charAt(0);
-        if (!currentChatId) startNewChat(p);
+        // Always show welcome screen if messages area is empty
+        const msgsEl = document.getElementById(`${p}-ai-msgs`);
+        if (!currentChatId || !msgsEl || msgsEl.children.length === 0) {
+            startNewChat(p);
+        }
+    }
+    if (tabId.endsWith('-dardasha')) {
+        // Re-initialize chat list on tab switch to ensure fresh data
+        const prefix = selectedRole === 'teacher' ? 't' : 's';
+        const chatList = document.getElementById(`${prefix}-chat-list`);
+        if (chatList && chatList.children.length === 0) {
+            initDardasha();
+        }
     }
 };
 
@@ -1711,7 +1726,8 @@ window.copyProfileLinkFor = async (otherUid) => {
 window.filterChats = (prefix, term) => {
     const items = document.querySelectorAll(`#${prefix}-chat-list .chat-item`);
     items.forEach(item => {
-        const name = item.querySelector('div[style*="font-weight:bold"]').innerText.toLowerCase();
+        const nameEl = item.querySelector('.chat-item-name') || item.querySelector('span');
+        const name = (nameEl ? nameEl.innerText : item.innerText).toLowerCase();
         if(name.includes(term.toLowerCase())) item.classList.remove('hidden');
         else item.classList.add('hidden');
     });
@@ -3252,9 +3268,10 @@ window.startTest = async function(id) {
 
 const savedUser = localStorage.getItem('sa_user'); const savedRole = localStorage.getItem('sa_role'); const savedIcon = localStorage.getItem('sa_icon'); const savedUid = localStorage.getItem('sa_uid');
 if (savedUser && savedRole) {
-    currentUser = savedUser; selectedRole = savedRole; myUid = savedUid;
+    currentUser = savedUser; selectedRole = savedRole; 
+    myUid = (savedUid && savedUid !== 'null' && savedUid !== 'undefined') ? savedUid : null;
     document.getElementById('landing-layer').classList.add('hidden');
-    loginSuccess(currentUser, savedIcon, savedUid);
+    loginSuccess(currentUser, savedIcon, myUid);
 } else { document.getElementById('landing-layer').classList.remove('hidden'); }
 
 let deferredPrompt;
