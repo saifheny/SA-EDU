@@ -787,34 +787,17 @@ window.switchTab = (tabId, btn) => {
     if (_currentTabId && tabId === _currentTabId) return;
 
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-    const oldIdx = tabs.indexOf(_currentTabId);
-    const newIdx = tabs.indexOf(tabId);
     const isAI = tabId.endsWith('-ai');
-    const wasAI = (_currentTabId || '').endsWith('-ai');
 
+    // Hide old section immediately - no overlap
     const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
-
     if (oldSection) {
-        if (wasAI || (_currentTabId && _currentTabId.endsWith('-dardasha'))) {
-            // AI and chat sections: hide immediately (no exit animation)
-            oldSection.classList.add('hidden');
-        } else {
-            oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left');
-            void oldSection.offsetWidth;
-            oldSection.classList.add(newIdx > oldIdx ? 'page-exit-left' : 'page-exit-right');
-            setTimeout(() => {
-                oldSection.classList.add('hidden');
-                oldSection.classList.remove('page-exit-right','page-exit-left');
-            }, 280);
-        }
+        oldSection.classList.add('hidden');
+        oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
     }
 
+    // Show new section
     newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-    if (!isAI) {
-        void newSection.offsetWidth;
-        newSection.classList.add(newIdx > oldIdx ? 'page-enter-right' : 'page-enter-left');
-        setTimeout(() => newSection.classList.remove('page-enter-right','page-enter-left'), 320);
-    }
 
     _currentTabId = tabId;
 
@@ -836,16 +819,14 @@ window.switchTab = (tabId, btn) => {
     }
     if (tabId === 't-library') { loadTeacherTests(); startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان'); }
     if (tabId === 't-reese' || tabId === 's-reese') loadReesePosts(selectedRole === 'teacher' ? 't' : 's');
-    if (tabId.endsWith('-ai')) {
+    if (isAI) {
         const p = tabId.charAt(0);
-        // Always show welcome screen if messages area is empty
         const msgsEl = document.getElementById(`${p}-ai-msgs`);
         if (!currentChatId || !msgsEl || msgsEl.children.length === 0) {
             startNewChat(p);
         }
     }
     if (tabId.endsWith('-dardasha')) {
-        // Re-initialize chat list on tab switch to ensure fresh data
         const prefix = selectedRole === 'teacher' ? 't' : 's';
         const chatList = document.getElementById(`${prefix}-chat-list`);
         if (chatList && chatList.children.length === 0) {
