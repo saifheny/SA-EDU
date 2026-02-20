@@ -461,7 +461,7 @@ function loginSuccess(name, icon, uid) {
         updateStreakOnLogin();
         setTimeout(() => renderXPHud(), 300);
         setTimeout(() => initSwipeNavigation('student-app'), 500);
-        // Initialize student AI welcome screen early
+        
         setTimeout(() => { if (!currentChatId) startNewChat('s'); }, 100);
     }
     initDardasha();
@@ -733,7 +733,7 @@ window.saveProfileName = async () => {
             const oldRef = ref(db, `users/${selectedRole}s/${currentUser}`);
             const snapshot = await get(oldRef);
             const data = snapshot.val();
-            // Preserve UID when moving to new name
+            
             await set(ref(db, `users/${selectedRole}s/${newName}`), data);
             await remove(oldRef);
             currentUser = newName; 
@@ -787,7 +787,6 @@ if(document.getElementById('landing-type-text')) { startTypewriter("landing-type
 
 let _currentTabId = null;
 
-// Firebase listener unsubscribe trackers - prevent duplicate listeners
 let _reeseListener = null;
 let _testsListener = null;
 let _dardashaListener = null;
@@ -804,20 +803,20 @@ window.switchTab = (tabId, btn) => {
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const isAI = tabId.endsWith('-ai');
 
-    // Hide old section immediately - no overlap
+    
     const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
     if (oldSection) {
         oldSection.classList.add('hidden');
         oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
     }
 
-    // Show new section
+    
     newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
 
     _currentTabId = tabId;
-    // Inject section hero banner lazily
+    
     setTimeout(() => { if (typeof injectSectionHero === 'function') injectSectionHero(tabId); }, 80);
-    // Render daftar grid when entering daftar tab
+    
     if (tabId === 't-daftar' || tabId === 's-daftar') {
         setTimeout(() => { if (typeof daftarRenderGrid === 'function') daftarRenderGrid(); }, 120);
     }
@@ -1717,7 +1716,7 @@ window.copyProfileLinkFor = async (otherUid) => {
     const roomId = activeChatRoomId;
     const myIcon = localStorage.getItem('sa_icon') || 'fa-user';
 
-    // Save room meta using data already known from openChatRoom call
+    
     await update(ref(db, `chat_room_meta/${roomId}`), {
         members: [myUid, otherUid],
         names: { [myUid]: currentUser },
@@ -1784,7 +1783,7 @@ async function loadReeseAiSuggestionsAuto() {
     const prompt = `أنت مساعد منصة SA EDU التعليمية. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح يجب أن يكون في فئة مختلفة: ${categories.join(', ')}. المنشورات تكون طبيعية وواقعية ومميزة وغير رسمية. ${prevStr}. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف. لا تكتب أي شيء آخر.`;
 
     try {
-        let text = await callPollinationsAI(prompt);
+        let text = await callPollinationsAI([{role:"user",content:prompt}]);
         text = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const first = text.indexOf('[');
         const last = text.lastIndexOf(']');
@@ -1927,7 +1926,7 @@ window.likeReese = async (id, currentLikes) => {
     const index = likedPosts.indexOf(id);
     const wasLiked = index !== -1;
     
-    // Get fresh likes count from Firebase to avoid race conditions
+    
     let freshLikes = currentLikes;
     try {
         const snap = await get(ref(db, `posts/${id}/likes`));
@@ -2019,7 +2018,7 @@ window.renderAiWelcome = (prefix) => {
             </div>
         </div>`;
 
-    // Add chips safely via JS to avoid quote escaping issues
+    
     const chipsContainer = document.getElementById(`ai-welcome-chips-${prefix}`);
     const chipsData = selectedRole === 'teacher' ? [
         { icon: 'fas fa-flask', text: 'أنشئ اختبار عن الكيمياء العضوية' },
@@ -2192,7 +2191,7 @@ function renderMessageUI(prefix, role, text, imgB64) {
             <button class="msg-action-btn ai-share-btn" title="مشاركة"><i class="ph-bold ph-share-network"></i></button>
             <button class="msg-action-btn ai-copy-btn" title="نسخ"><i class="ph-bold ph-copy"></i></button>
         `;
-        // Use dataset to avoid JS injection in inline handlers
+        
         const shareBtn = actions.querySelector('.ai-share-btn');
         const copyBtn = actions.querySelector('.ai-copy-btn');
         shareBtn.addEventListener('click', () => {
@@ -2897,7 +2896,7 @@ window.generateAiQuestions = async () => {
     Return ONLY raw JSON.`;
     
     try {
-        let jsonStr = await callPollinationsAI(prompt);
+        let jsonStr = await callPollinationsAI([{role:"user",content:prompt}]);
         jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
         
         const firstBracket = jsonStr.indexOf('[');
@@ -3329,7 +3328,6 @@ const pwaBanner = document.getElementById('pwa-install-banner');
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    // Check if already installed (standalone)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
     if (!isStandalone) {
         setTimeout(() => {
@@ -3363,11 +3361,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-
-
-// ============================================================
-// PROFILE PREVIEW - show user card before login if ?chat=UID
-// ============================================================
 let _pendingChatUid = null;
 
 async function checkProfilePreviewOnLoad() {
@@ -3377,7 +3370,6 @@ async function checkProfilePreviewOnLoad() {
 
     _pendingChatUid = chatUid;
 
-    // Fetch user data
     let userData = null;
     let userRole = 'طالب';
     try {
@@ -3406,7 +3398,6 @@ async function checkProfilePreviewOnLoad() {
         document.getElementById('pp-role-badge').textContent = 'عضو';
     }
 
-    // Only show if not logged in
     const savedUser = localStorage.getItem('sa_user');
     if (!savedUser) {
         document.getElementById('landing-layer').classList.add('hidden');
@@ -3425,14 +3416,8 @@ window.dismissProfilePreview = () => {
     _pendingChatUid = null;
 };
 
-// Call on load after DB is ready
 window.addEventListener('load', () => { setTimeout(checkProfilePreviewOnLoad, 800); });
 
-
-
-// ============================================================
-// SECTION HERO BANNERS - images per section
-// ============================================================
 const SECTION_HEROES = {
     't-library':  { img: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800&q=80', label: 'مكتبة الاختبارات', icon: 'fa-layer-group', color: '#3b82f6' },
     't-reese':    { img: 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=800&q=80', label: 'Reese — الشبكة الاجتماعية', icon: 'fa-feather-alt', color: '#8b5cf6' },
@@ -3477,11 +3462,6 @@ function injectSectionHero(sectionId) {
     else sec.prepend(banner);
 }
 
-
-
-// ============================================================
-// DAFTAR SMART NOTES
-// ============================================================
 let _daftarNotes = [];
 let _daftarCurrentId = null;
 let _daftarPages = [''];
@@ -3554,7 +3534,6 @@ window.openDaftarEditor = (noteId, type = 'default') => {
         _daftarCurrentId = 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
         _daftarPages = getDefaultPageContent(type);
         document.getElementById('daftar-note-title').value = '';
-        // Store new note immediately
         _daftarNotes.push({
             id: _daftarCurrentId, type,
             title: '', pages: [..._daftarPages],
@@ -3590,7 +3569,6 @@ function daftarRenderPages() {
         page.innerHTML = content || '';
         page.innerHTML += `<div class="ded-page-num-badge">${i+1}</div>`;
         page.addEventListener('input', () => {
-            // Save page content (remove the badge before saving)
             const clone = page.cloneNode(true);
             clone.querySelectorAll('.ded-page-num-badge').forEach(b => b.remove());
             _daftarPages[i] = clone.innerHTML;
@@ -3622,7 +3600,6 @@ function daftarAutoSave() {
 
 window.saveDaftarNote = () => {
     if (!_daftarCurrentId) return;
-    // Capture current live content from DOM
     document.querySelectorAll('.ded-page').forEach((page, i) => {
         const clone = page.cloneNode(true);
         clone.querySelectorAll('.ded-page-num-badge').forEach(b => b.remove());
@@ -3684,7 +3661,6 @@ window.daftarPrevPage = () => {
     }
 };
 
-// Toolbar commands
 window.ded_cmd = (cmd) => { document.execCommand(cmd, false, null); };
 window.ded_color = (color) => { document.execCommand('foreColor', false, color); };
 window.ded_heading = (tag) => {
@@ -3707,7 +3683,6 @@ window.daftarHandleImage = (input) => {
     reader.readAsDataURL(input.files[0]);
 };
 
-// AI Enhance
 window.daftarAIEnhance = async () => {
     saveDaftarNote();
     const page = document.querySelector('.ded-page');
@@ -3718,7 +3693,7 @@ window.daftarAIEnhance = async () => {
     showToast('🤖 AI يحسّن ملاحظتك...');
     try {
         const prompt = `أنت مساعد تعليمي. قم بتحسين وتنظيم هذه الملاحظة الدراسية وأضف نقاط مهمة وعناوين واضحة. أعد النص HTML مباشرة بدون ```html أو أي markdown. النص:\n${text}`;
-        let result = await callPollinationsAI(prompt);
+        let result = await callPollinationsAI([{role:"user",content:prompt}]);
         result = result.replace(/```html|```/g, '').trim();
         page.innerHTML = result + `<div class="ded-page-num-badge">${_daftarCurrentPage+1}</div>`;
         _daftarPages[_daftarCurrentPage] = result;
@@ -3729,7 +3704,6 @@ window.daftarAIEnhance = async () => {
     }
 };
 
-// Export to PDF
 window.daftarExportPDF = async () => {
     saveDaftarNote();
     showToast('📄 جاري إنشاء PDF...');
@@ -3742,7 +3716,6 @@ window.daftarExportPDF = async () => {
         const pages = document.querySelectorAll('.ded-page');
         for (let i = 0; i < pages.length; i++) {
             if (i > 0) pdf.addPage();
-            // Use html2canvas to capture each page
             const canvas = await html2canvas(pages[i], {
                 scale: 2,
                 useCORS: true,
@@ -3761,12 +3734,3 @@ window.daftarExportPDF = async () => {
         showToast('❌ خطأ في إنشاء PDF');
     }
 };
-
-function showToast(msg) {
-    if (typeof saAlert === 'function') return; // use existing
-    const t = document.createElement('div');
-    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 20px;border-radius:12px;z-index:99999;font-size:0.85rem;white-space:nowrap;';
-    t.textContent = msg;
-    document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2500);
-}
