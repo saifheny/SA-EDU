@@ -131,7 +131,7 @@ function initSwipeNavigation(portalId) {
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
 
-        const newIdx = dx > 0 ? idx + 1 : idx - 1;
+        const newIdx = dx < 0 ? idx + 1 : idx - 1;
         if (newIdx < 0 || newIdx >= tabs.length) return;
 
         const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
@@ -476,6 +476,7 @@ function loginSuccess(name, icon, uid) {
     if (selectedRole === 'student') {
         setTimeout(() => {
             startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
+            triggerAIAnalysisBadge();
         }, 600);
         setTimeout(() => renderXPHud(), 300);
     }
@@ -803,20 +804,23 @@ window.switchTab = (tabId, btn) => {
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const isAI = tabId.endsWith('-ai');
 
-    // Hide ALL sections immediately – no overlap
-    const protectedIds = ['s-taking-test', 's-review-test'];
-    document.querySelectorAll(`#${portal} .app-section`).forEach(s => {
-        if (!protectedIds.includes(s.id)) {
-            s.classList.add('hidden');
-            s.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-        }
-    });
-    window.scrollTo({ top: 0, behavior: 'instant' });
+    // Hide old section immediately - no overlap
+    const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
+    if (oldSection) {
+        oldSection.classList.add('hidden');
+        oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
+    }
 
     // Show new section
     newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
 
     _currentTabId = tabId;
+    // Inject section hero banner lazily
+    setTimeout(() => { if (typeof injectSectionHero === 'function') injectSectionHero(tabId); }, 80);
+    // Render daftar grid when entering daftar tab
+    if (tabId === 't-daftar' || tabId === 's-daftar') {
+        setTimeout(() => { if (typeof daftarRenderGrid === 'function') daftarRenderGrid(); }, 120);
+    }
 
     if (btn) {
         document.querySelectorAll(`#${portal} .nav-btn`).forEach(b => b.classList.remove('active'));
@@ -1014,13 +1018,9 @@ window.startChatSpeech = async (chatId, otherUid) => {
             ? 'audio/webm;codecs=opus'
             : MediaRecorder.isTypeSupported('audio/webm')
             ? 'audio/webm'
-            : MediaRecorder.isTypeSupported('audio/mp4')
-            ? 'audio/mp4'
-            : MediaRecorder.isTypeSupported('audio/ogg')
-            ? 'audio/ogg'
-            : '';
+            : 'audio/ogg';
 
-        _voiceRec = new MediaRecorder(stream, mimeType ? { mimeType } : {});
+        _voiceRec = new MediaRecorder(stream, { mimeType });
         _voiceChunks = [];
         _voiceSeconds = 0;
         _voiceRecording = true;
@@ -1190,57 +1190,38 @@ async function startActualCall(otherUid, roomId, isCaller) {
 }
 
 function showActiveCallUI(roomId, otherUid) {
-    document.getElementById('mini-call-fab')?.remove();
-    const fab = document.createElement('div');
-    fab.id = 'mini-call-fab';
-    fab.className = 'mini-call-fab';
-    fab.innerHTML = `
-        <div class="mini-call-fab-inner" onclick="expandVoiceRoom()">
+    document.getElementById('mini-call-bar')?.remove();
+    const mini = document.createElement('div');
+    mini.id = 'mini-call-bar';
+    mini.className = 'mini-call-bar';
+    mini.innerHTML = `
+        <div class="mini-call-left">
             <span class="mini-live-dot"></span>
-            <i class="ph-bold ph-phone" style="font-size:1.3rem;color:#fff;"></i>
+            <span class="mini-call-label">مكالمة جارية</span>
         </div>
-        <button class="mini-call-fab-end" onclick="endPeerCall('${otherUid}')" title="إنهاء">
+        <button class="mini-call-btn expand" onclick="expandVoiceRoom()" title="فتح المكالمة">
+            <i class="ph-bold ph-arrows-out"></i>
+        </button>
+        <button class="mini-call-btn end" onclick="endPeerCall('${otherUid}')" title="إنهاء">
             <i class="ph-bold ph-phone-disconnect"></i>
         </button>
     `;
-    // Make draggable
-    makeDraggable(fab);
-    document.body.appendChild(fab);
-    requestAnimationFrame(() => fab.classList.add('visible'));
-}
-
-function makeDraggable(el) {
-    let startY, startTop, startRight, dragging = false;
-    el.addEventListener('touchstart', (e) => {
-        if (e.target.closest('.mini-call-fab-end')) return;
-        startY = e.touches[0].clientY;
-        const rect = el.getBoundingClientRect();
-        startTop = rect.top;
-        startRight = window.innerWidth - rect.right;
-        dragging = false;
-    }, { passive: true });
-    el.addEventListener('touchmove', (e) => {
-        const dy = e.touches[0].clientY - startY;
-        if (Math.abs(dy) > 5) dragging = true;
-        if (!dragging) return;
-        const newTop = Math.max(60, Math.min(window.innerHeight - 120, startTop + dy));
-        el.style.top = newTop + 'px';
-        el.style.bottom = 'auto';
-    }, { passive: true });
+    document.body.appendChild(mini);
+    requestAnimationFrame(() => mini.classList.add('visible'));
 }
 
 window.expandVoiceRoom = () => {
     const screen = document.getElementById('voice-room-screen');
     if (screen) screen.classList.add('open');
-    const fab = document.getElementById('mini-call-fab');
-    if (fab) fab.style.display = 'none';
+    const bar = document.getElementById('mini-call-bar');
+    if (bar) bar.style.display = 'none';
 };
 
 window.minimizeVoiceRoom = () => {
     const screen = document.getElementById('voice-room-screen');
     if (screen) screen.classList.remove('open');
-    const fab = document.getElementById('mini-call-fab');
-    if (fab) { fab.style.display = ''; fab.classList.add('visible'); }
+    const bar = document.getElementById('mini-call-bar');
+    if (bar) { bar.style.display = ''; bar.classList.add('visible'); }
 };
 
 window.endPeerCall = async (otherUid) => {
@@ -1254,7 +1235,6 @@ window.endPeerCall = async (otherUid) => {
 
 function removeCallUI() {
     document.getElementById('call-ui')?.remove();
-    document.getElementById('mini-call-fab')?.remove();
     document.getElementById('mini-call-bar')?.remove();
 }
 
@@ -1532,14 +1512,12 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
             if (playerEl && !playerEl.querySelector('audio')) {
                 const aud = document.createElement('audio');
                 aud.id = `audio-${audioKey}`;
-                aud.preload = 'metadata';
-                aud.style.display = 'none';
+                aud.preload = 'none';
                 aud.onended = () => resetVoiceBtn(audioKey);
-                aud.onerror = () => resetVoiceBtn(audioKey);
                 aud.src = audioStore;
                 playerEl.appendChild(aud);
             }
-        }, 50);
+        }, 100);
     } else {
         content = `<div class="wapp-msg"><div class="wapp-text">${makeLinksClickable(msg.text || '')}</div>${buildMsgFooter(msg, isMe)}</div>`;
     }
@@ -1578,33 +1556,20 @@ function generateWaveform() {
 }
 
 window.toggleVoicePlay = (btn, key) => {
-    let audio = document.getElementById(`audio-${key}`);
-    if (!audio) {
-        // Not ready yet, retry
-        setTimeout(() => window.toggleVoicePlay(btn, key), 150);
-        return;
-    }
+    const audio = document.getElementById(`audio-${key}`);
+    if (!audio) return;
     if (audio.paused) {
-        // Pause all others
-        document.querySelectorAll('audio[id^="audio-"]').forEach(a => {
-            if (a !== audio) { try { a.pause(); a.currentTime = 0; } catch(e){} }
-        });
-        document.querySelectorAll('.voice-play-btn').forEach(b => {
-            if (b !== btn) b.innerHTML = '<i class="ph-bold ph-play"></i>';
-        });
-        // Load if needed
-        if (audio.readyState === 0) audio.load();
+        document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
+        document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
         const playPromise = audio.play();
         if (playPromise !== undefined) {
             playPromise.then(() => {
                 btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-            }).catch(() => {
+            }).catch(err => {
                 audio.load();
-                setTimeout(() => {
-                    audio.play().then(() => {
-                        btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-                    }).catch(() => { btn.innerHTML = '<i class="ph-bold ph-play"></i>'; });
-                }, 200);
+                audio.play().then(() => {
+                    btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+                }).catch(() => {});
             });
         } else {
             btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
@@ -1818,75 +1783,22 @@ async function loadReeseAiSuggestionsAuto() {
 
     const prompt = `أنت مساعد منصة SA EDU التعليمية. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح يجب أن يكون في فئة مختلفة: ${categories.join(', ')}. المنشورات تكون طبيعية وواقعية ومميزة وغير رسمية. ${prevStr}. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف. لا تكتب أي شيء آخر.`;
 
-    // Fallback suggestion pools
-    const fallbackStudent = [
-        ['🔥 المذاكرة صعبة؟ الحل: فترات قصيرة وراحة كافية. جرب تقنية بومودورو!',
-         '💡 أفضل وقت للمذاكرة هو الصباح الباكر، جربها هتلاقي فرق كبير!',
-         '🎯 حل 3 امتحانات قديمة أفضل من قراءة الكتاب مرتين كاملتين.',
-         '✨ مذاكرت اليوم وفرت لي وقت كتير، الاستثمار الحقيقي في نفسك!'],
-        ['📚 كل يوم درس جديد = خطوة للأمام. الثبات أقوى من الاجتهاد المتقطع!',
-         '⚡ مراجعة سريعة قبل النوم = معلومات تترسخ في ذاكرتك طول الليل!',
-         '🏆 انا أخدت الدرجة النهارده! التعب بيستاهل دايماً 💪',
-         '🌙 الليلة خصصت ساعتين للمراجعة ومحتاج حد يشجعني!'],
-        ['🤔 سؤال للجميع: إيه أصعب مادة عليكم وليه؟',
-         '📝 لو عندك نصيحة للمذاكرة، شاركها دلوقتي!',
-         '🌟 أهم حاجة في النجاح: الاستمرارية مش الموهبة!',
-         '🎓 الامتحانات قربت.. شاركوا جداول مذاكرتكم!'],
-    ];
-    const fallbackTeacher = [
-        ['💡 نصيحة للطلاب: اكتبوا الأسئلة اللي مش فاهموها وراجعوها مع المعلم.',
-         '🎯 أسلوب التعليم بالقصص يثبت المعلومات أسرع من الشرح التقليدي!',
-         '🏫 تذكروا: كل سؤال غبي أفضل من معلومة غلط في الامتحان!',
-         '✨ طالب مجتهد يحتاج فرصة، ليس فقط شرحاً. أعطوهم فرص للتطبيق!'],
-        ['📚 الحصة الأفضل هي اللي الطالب يخرج منها متحمس يكمل بنفسه.',
-         '⚡ سؤال تفاعلي في بداية الحصة يفتح عقول الطلاب ويشدّ انتباههم.',
-         '🔥 التشجيع أقوى درس يمكن تعلمه، لا تقتصد فيه مع طلابك!',
-         '🌟 مشاركة إنجازات طلابك مع الأهل تبني ثقة لا تُقدر بثمن.'],
-    ];
-
-    const pool = selectedRole === 'teacher' ? fallbackTeacher : fallbackStudent;
-    // Pick a random pool different from last used
-    let poolIdx = Math.floor(Math.random() * pool.length);
-    if (_lastReesePoolIdx === poolIdx && pool.length > 1) poolIdx = (poolIdx + 1) % pool.length;
-    _lastReesePoolIdx = poolIdx;
-
     try {
-        const ctrl = new AbortController();
-        const timeout = setTimeout(() => ctrl.abort(), 8000);
-        let text = '';
-        try {
-            const r = await fetch('https://text.pollinations.ai/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messages: [{role:'user',content:prompt}], model: 'openai', private: true, seed: Math.floor(Math.random()*99999) }),
-                signal: ctrl.signal
-            });
-            clearTimeout(timeout);
-            if (r.ok) text = await r.text();
-        } catch(fetchErr) { clearTimeout(timeout); }
-
+        let text = await callPollinationsAI(prompt);
+        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        const first = text.indexOf('[');
+        const last = text.lastIndexOf(']');
+        if (first !== -1 && last !== -1) text = text.substring(first, last + 1);
         let suggestions = [];
-        if (text && text.length > 10) {
-            text = text.replace(/```json|```/g, '').trim();
-            const first = text.indexOf('['), last = text.lastIndexOf(']');
-            if (first !== -1 && last !== -1) {
-                try {
-                    const parsed = JSON.parse(text.substring(first, last+1));
-                    if (Array.isArray(parsed)) suggestions = parsed.filter(s => typeof s === 'string' && s.trim().length > 5);
-                } catch(e) {}
-            }
-        }
+        try { suggestions = JSON.parse(text); } catch(e) { suggestions = [text]; }
+        if (!Array.isArray(suggestions)) suggestions = [text];
 
-        // Use fallback if AI failed or returned nothing
-        if (suggestions.length < 3) suggestions = [...pool[poolIdx]];
-
-        // Shuffle for variety
-        suggestions = suggestions.sort(() => Math.random() - 0.5);
+        suggestions = suggestions.filter(s => typeof s === 'string' && s.trim().length > 5);
         _lastReeseSuggestions = suggestions.slice(0, 4);
 
         container.innerHTML = '';
         const catIcons = ['✨', '💡', '🔥', '🎯'];
-        _lastReeseSuggestions.forEach((sug, i) => {
+        suggestions.slice(0, 4).forEach((sug, i) => {
             const chip = document.createElement('div');
             chip.className = 'suggestion-chip';
             chip.innerHTML = `<span style="font-size:1rem;">${catIcons[i] || '✨'}</span> ${sug}`;
@@ -1897,20 +1809,7 @@ async function loadReeseAiSuggestionsAuto() {
             container.appendChild(chip);
         });
     } catch(e) {
-        // Always show fallback on error
-        const fallback = pool[poolIdx];
-        container.innerHTML = '';
-        const catIcons = ['✨', '💡', '🔥', '🎯'];
-        fallback.forEach((sug, i) => {
-            const chip = document.createElement('div');
-            chip.className = 'suggestion-chip';
-            chip.innerHTML = `<span style="font-size:1rem;">${catIcons[i]}</span> ${sug}`;
-            chip.onclick = () => {
-                document.getElementById('reese-text-input').value = sug;
-                document.getElementById('reese-text-input').focus();
-            };
-            container.appendChild(chip);
-        });
+        container.innerHTML = '<div class="suggestion-chip" style="opacity:0.5; pointer-events:none;"><i class="fas fa-wifi-slash"></i> تعذر تحميل الاقتراحات</div>';
     }
 }
 
@@ -2006,27 +1905,6 @@ window.loadReesePosts = (prefix) => {
                     <button class="reese-btn ${isLiked ? 'liked' : ''}" onclick="likeReese('${post.id}', ${post.likes || 0})"><i class="fas ${isLiked ? 'fa-thumbs-up' : 'fa-thumbs-up'}" style="font-size:1.3rem;"></i> <span style="font-size:1.1rem;">${post.likes || 0}</span></button>
                     <button class="reese-btn" onclick="shareReese('${post.id}')"><i class="fas fa-share"></i> مشاركة</button>
                 </div>`;
-            // Double-tap to like
-            let lastTap = 0;
-            div.addEventListener('touchend', (e) => {
-                const now = Date.now();
-                if (now - lastTap < 350) {
-                    // Double tap - find the like button and click it
-                    const likeBtn = div.querySelector('.reese-btn');
-                    if (likeBtn) {
-                        // Show heart burst
-                        const heart = document.createElement('div');
-                        heart.innerHTML = '❤️';
-                        heart.style.cssText = `position:absolute;font-size:3rem;pointer-events:none;animation:heartBurst 0.8s ease forwards;z-index:99;left:50%;top:50%;transform:translate(-50%,-50%);`;
-                        div.style.position = 'relative';
-                        div.appendChild(heart);
-                        setTimeout(() => heart.remove(), 800);
-                        likeReese(post.id, post.likes || 0);
-                    }
-                }
-                lastTap = now;
-            }, { passive: true });
-
             container.appendChild(div); container.appendChild(createAdBanner());
         });
         if(visibleCount === 0) container.innerHTML = getEmptyStateHTML('posts');
@@ -2749,160 +2627,38 @@ window.saveAns = (i, v) => answers[i] = v;
 window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفقد تقدمك.", () => { clearInterval(timerInt); timerInt = null; activeTest = null; answers = {}; document.getElementById('s-taking-test').classList.add('hidden'); }); };
 
 window.submitExam = async () => {
-    clearInterval(timerInt);
-    const questions = activeTest.questions || [];
-    let score = 0, total = 0, details = [];
-    let essayAnswers = [];
-
-    // Score MCQ instantly; collect essays
-    questions.forEach((q, i) => {
-        const pts = parseInt(q.points) || 1;
-        total += pts;
-        if (q.type === 'essay') {
-            const userAns = (answers[i] || '').trim();
-            details.push({ q: q.text, image: q.image||null, user: userAns, correct: '', isCorrect: false, type: 'essay', pts });
-            if (userAns.length > 2) essayAnswers.push({ idx: details.length - 1, question: q.text, userAns, pts });
-        } else {
-            const isCorrect = answers[i] === q.correct;
-            if (isCorrect) score += pts;
-            details.push({ q: q.text, image: q.image||null, user: answers[i]||'-', correct: q.correct, isCorrect, type: 'mcq' });
-        }
-    });
-
-    // Show loading screen for essay grading
-    const takingScreen = document.getElementById('s-taking-test');
-    if (essayAnswers.length > 0) {
-        takingScreen.innerHTML = `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:20px;text-align:center;padding:40px;">
-                <div style="width:70px;height:70px;border-radius:50%;background:linear-gradient(135deg,#7c3aed,#6366f1);display:flex;align-items:center;justify-content:center;animation:logoPulse 1.5s infinite;">
-                    <i class="fas fa-brain" style="font-size:2rem;color:#fff;"></i>
-                </div>
-                <h2 style="margin:0;font-size:1.3rem;">جاري تقييم إجاباتك المقالية</h2>
-                <p style="color:#666;margin:0;">الذكاء الاصطناعي يقرأ ويحلل إجاباتك...</p>
-                <div class="analytics-loading-spin"></div>
-            </div>`;
-        // AI grade each essay
-        for (const ea of essayAnswers) {
-            try {
-                const prompt = `أنت معلم خبير. قيّم هذه الإجابة المقالية من طالب:
-السؤال: ${ea.question}
-إجابة الطالب: ${ea.userAns}
-أعطِ: (1) درجة من 10 للإجابة (2) جملة تقييم موجزة (3) الإجابة النموذجية في جملتين.
-أجب بـ JSON فقط بهذا الشكل: {"score":7,"feedback":"تقييم موجز","model":"الإجابة النموذجية"}`;
-                let txt = await callPollinationsAI([{role:'user',content:prompt}]);
-                txt = txt.replace(/```json|```/g,'').trim();
-                const first = txt.indexOf('{'), last = txt.lastIndexOf('}');
-                if (first !== -1 && last !== -1) txt = txt.substring(first, last+1);
-                const res = JSON.parse(txt);
-                const aiScore = Math.round((parseFloat(res.score)||0)/10 * ea.pts);
-                score += aiScore;
-                details[ea.idx].isCorrect = aiScore >= ea.pts * 0.6;
-                details[ea.idx].correct = res.model || '';
-                details[ea.idx].aiFeedback = res.feedback || '';
-                details[ea.idx].aiScore = aiScore;
-            } catch(e) {
-                // Partial credit if answered
-                const partial = Math.round(ea.pts * 0.5);
-                score += partial;
-                details[ea.idx].isCorrect = true;
-                details[ea.idx].aiScore = partial;
-            }
-        }
-    }
-
-    const pct = total === 0 ? 0 : Math.round((score/total)*100);
-
-    // Only save FIRST attempt
-    const existingSnap = await get(ref(db, `results/${activeTest.id}/${currentUser}`)).catch(()=>null);
-    if (!existingSnap || !existingSnap.exists()) {
-        await set(ref(db, `results/${activeTest.id}/${currentUser}`), { score, total, percentage: pct, timestamp: Date.now(), details });
-    }
-
     playSound('success');
-    takingScreen.classList.add('hidden');
-    loadStudentExams(); loadStudentGrades();
-    showExamResultsScreen(pct, score, total, details, activeTest.title);
-
-    // Award XP
-    const startTime = window._examStartTime || Date.now();
-    const durationMs = (activeTest ? activeTest.duration * 60 * 1000 : 999999999);
-    const elapsed = Date.now() - startTime;
-    const fast = elapsed < durationMs * 0.5;
-    const allCorrect = total > 0 && score === total;
-    const correctCount = details.filter(d => d.isCorrect).length;
-    const baseXP = Math.max(10, Math.round((score / Math.max(total, 1)) * 50));
-    awardXP(baseXP, '🎓 إتمام اختبار', { allCorrect, fast, examCompleted: true, correctCount });
-    renderXPHud();
+    clearInterval(timerInt); let score = 0, total = 0, details = [];
+    const questions = activeTest.questions || [];
+    questions.forEach((q, i) => {
+        const pts = parseInt(q.points) || 1; 
+        total += pts; 
+        
+        let isCorrect = false;
+        if (q.type === 'essay') {
+            if (answers[i] && answers[i].trim().length > 2) {
+                isCorrect = true; 
+                score += pts;
+            }
+        } else {
+            isCorrect = answers[i] === q.correct;
+            if(isCorrect) score += pts; 
+        }
+        
+        details.push({ 
+            q: q.text, 
+            image: q.image || null, 
+            user: answers[i]||'-', 
+            correct: q.correct, 
+            isCorrect,
+            type: q.type || 'mcq'
+        });
+    });
+    const pct = total === 0 ? 0 : Math.round((score/total)*100);
+    await set(ref(db, `results/${activeTest.id}/${currentUser}`), { score, total, percentage: pct, timestamp: Date.now(), details });
+    saAlert(`تم التسليم! النتيجة التقريبية: ${pct}%`, "success");
+    document.getElementById('s-taking-test').classList.add('hidden'); loadStudentExams(); loadStudentGrades(); 
 };
-
-function showExamResultsScreen(pct, score, total, details, examTitle) {
-    let screen = document.getElementById('sa-exam-results-screen');
-    if (!screen) {
-        screen = document.createElement('div');
-        screen.id = 'sa-exam-results-screen';
-        screen.style.cssText = 'position:fixed;inset:0;background:#000;z-index:3500;overflow-y:auto;padding:20px;';
-        document.body.appendChild(screen);
-    }
-    screen.classList.remove('hidden');
-
-    const iconClass = localStorage.getItem('sa_icon') || 'fa-user-astronaut';
-    const levelColor = pct >= 90 ? 'var(--accent-gold)' : pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--accent-primary)' : 'var(--danger)';
-    const msg = pct >= 90 ? '🏆 أداء رائع! أنت نجم!' : pct >= 75 ? '🎉 ممتاز! استمر هكذا!' : pct >= 50 ? '👍 جيد! يمكنك التحسين' : '💪 لا تستسلم، حاول مرة أخرى!';
-
-    const wrongDetails = details.filter(d => !d.isCorrect && d.type !== 'essay');
-    const essayDetails = details.filter(d => d.type === 'essay');
-
-    let wrongHtml = '';
-    wrongDetails.forEach((d, i) => {
-        wrongHtml += `
-        <div style="background:#111;border-radius:16px;padding:14px;margin-bottom:10px;border-right:4px solid var(--danger);">
-            <p style="margin:0 0 6px;font-weight:700;font-size:0.9rem;">${d.q}</p>
-            <div style="font-size:0.85rem;color:#888;">إجابتك: <span style="color:var(--danger);">${d.user}</span></div>
-            <div style="font-size:0.85rem;color:var(--success);margin-top:4px;">الصحيحة: ${d.correct}</div>
-        </div>`;
-    });
-
-    let essayHtml = '';
-    essayDetails.forEach((d) => {
-        essayHtml += `
-        <div style="background:#111;border-radius:16px;padding:14px;margin-bottom:10px;border-right:4px solid var(--accent-primary);">
-            <p style="margin:0 0 6px;font-weight:700;font-size:0.9rem;">${d.q}</p>
-            <div style="font-size:0.85rem;color:#aaa;">إجابتك: <span style="color:#fff;">${d.user||'-'}</span></div>
-            ${d.aiFeedback ? `<div style="font-size:0.82rem;color:var(--accent-primary);margin-top:6px;background:rgba(59,130,246,0.08);padding:8px;border-radius:8px;"><i class="fas fa-robot" style="margin-left:4px;"></i>${d.aiFeedback}</div>` : ''}
-            ${d.correct ? `<div style="font-size:0.82rem;color:#888;margin-top:4px;">النموذجية: ${d.correct}</div>` : ''}
-        </div>`;
-    });
-
-    screen.innerHTML = `
-        <div style="max-width:600px;margin:0 auto;padding-bottom:60px;">
-            <div style="text-align:center;padding:40px 20px 30px;">
-                <div style="width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#1a1a2e,#16213e);border:3px solid ${levelColor};margin:0 auto 16px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;animation:rewardPop 0.5s ease;box-shadow:0 0 30px ${levelColor}55;">
-                    <i class="fas ${iconClass}" style="color:${levelColor};"></i>
-                </div>
-                <div style="font-size:3.5rem;font-weight:900;color:${levelColor};line-height:1;">${pct}%</div>
-                <div style="font-size:1rem;color:#888;margin-top:4px;">${score} / ${total} درجة</div>
-                <div style="font-size:1.3rem;font-weight:700;margin-top:12px;">${msg}</div>
-                <div style="font-size:0.85rem;color:#666;margin-top:6px;">${examTitle}</div>
-            </div>
-
-            ${wrongDetails.length > 0 ? `
-            <div style="background:#0a0a0a;border-radius:20px;padding:16px;margin-bottom:16px;">
-                <h3 style="margin:0 0 12px;font-size:1rem;color:var(--danger);"><i class="fas fa-times-circle" style="margin-left:6px;"></i> أسئلة أخطأت فيها (${wrongDetails.length})</h3>
-                ${wrongHtml}
-            </div>` : '<div style="text-align:center;padding:20px;font-size:1.5rem;">✅ أجبت على كل الاختياريات صح!</div>'}
-
-            ${essayDetails.length > 0 ? `
-            <div style="background:#0a0a0a;border-radius:20px;padding:16px;margin-bottom:16px;">
-                <h3 style="margin:0 0 12px;font-size:1rem;color:var(--accent-primary);"><i class="fas fa-robot" style="margin-left:6px;"></i> تقييم المقالي بالذكاء الاصطناعي</h3>
-                ${essayHtml}
-            </div>` : ''}
-
-            <button onclick="document.getElementById('sa-exam-results-screen').classList.add('hidden');" class="modern-btn" style="margin-top:10px;">
-                <i class="fas fa-home" style="margin-left:8px;"></i> العودة للرئيسية
-            </button>
-        </div>
-    `;
-}
 
 window.reviewTest = async (id) => {
     playSound('click');
@@ -3518,9 +3274,40 @@ window.openLeaderboard = async () => {
     if (entries.length === 0) list.innerHTML = '<p style="color:#666; text-align:center;">لا يوجد بيانات كافية بعد</p>';
 };
 
-// XP is now awarded inside submitExam directly - no override needed
-// Keep startTest override only
+const _origSubmitExam = window.submitExam;
+window.submitExam = async function() {
+    const startTime = window._examStartTime || Date.now();
+    const durationMs = (activeTest ? activeTest.duration * 60 * 1000 : 999999999);
+    const elapsed = Date.now() - startTime;
+    const fast = elapsed < durationMs * 0.5;
 
+    let score = 0, total = 0;
+    const questions = activeTest ? activeTest.questions || [] : [];
+    questions.forEach((q, i) => {
+        const pts = parseInt(q.points) || 1;
+        total += pts;
+        if (q.type === 'essay') { if (answers[i] && answers[i].trim().length > 2) score += pts; }
+        else { if (answers[i] === q.correct) score += pts; }
+    });
+    const allCorrect = total > 0 && score === total;
+    const correctCount = questions.filter((q, i) => {
+        if (q.type === 'essay') return answers[i] && answers[i].trim().length > 2;
+        return answers[i] === q.correct;
+    }).length;
+    const baseXP = Math.max(10, Math.round((score / Math.max(total, 1)) * 50));
+
+    await _origSubmitExam.call(this);
+
+    const xpData = getXPData();
+    const streakMultiplier = xpData.streak >= 3 ? 1.5 : 1;
+    awardXP(baseXP, '🎓 إتمام اختبار', {
+        allCorrect,
+        fast,
+        examCompleted: true,
+        correctCount,
+    });
+    renderXPHud();
+};
 
 const _origStartTest = window.startTest;
 window.startTest = async function(id) {
@@ -3542,28 +3329,444 @@ const pwaBanner = document.getElementById('pwa-install-banner');
 window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
-    setTimeout(() => {
-        pwaBanner.classList.add('visible');
-    }, 2000); 
+    // Check if already installed (standalone)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+    if (!isStandalone) {
+        setTimeout(() => {
+            if (pwaBanner) {
+                pwaBanner.classList.remove('hidden');
+                requestAnimationFrame(() => pwaBanner.classList.add('visible'));
+            }
+        }, 1500);
+    }
 });
 
 window.installPWA = async () => {
     if (deferredPrompt) {
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') {
-            deferredPrompt = null;
-        }
+        deferredPrompt = null;
         closePWA();
     }
 };
 
 window.closePWA = () => {
-    pwaBanner.classList.remove('visible');
+    if (pwaBanner) {
+        pwaBanner.classList.remove('visible');
+        setTimeout(() => pwaBanner.classList.add('hidden'), 600);
+    }
 };
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js');
     });
+}
+
+
+
+// ============================================================
+// PROFILE PREVIEW - show user card before login if ?chat=UID
+// ============================================================
+let _pendingChatUid = null;
+
+async function checkProfilePreviewOnLoad() {
+    const params = new URLSearchParams(window.location.search);
+    const chatUid = params.get('chat');
+    if (!chatUid) return;
+
+    _pendingChatUid = chatUid;
+
+    // Fetch user data
+    let userData = null;
+    let userRole = 'طالب';
+    try {
+        const sSnap = await get(ref(db, 'users/students/' + chatUid));
+        if (sSnap.exists()) {
+            userData = sSnap.val(); userRole = 'طالب';
+        } else {
+            const tSnap = await get(ref(db, 'users/teachers/' + chatUid));
+            if (tSnap.exists()) { userData = tSnap.val(); userRole = 'معلم'; }
+        }
+    } catch(e) {}
+
+    const layer = document.getElementById('profile-preview-layer');
+    if (!layer) return;
+
+    if (userData) {
+        const icon = userData.icon || 'fa-user-astronaut';
+        document.getElementById('pp-avatar-icon').innerHTML = `<i class="fas ${icon}"></i>`;
+        document.getElementById('pp-username').textContent = userData.username || 'مستخدم';
+        document.getElementById('pp-role-badge').textContent = userRole;
+        document.getElementById('pp-stats-row').innerHTML = `
+            <span><i class="fas fa-calendar-alt"></i> عضو منذ ${new Date(userData.joinedAt || Date.now()).getFullYear()}</span>
+        `;
+    } else {
+        document.getElementById('pp-username').textContent = 'مستخدم';
+        document.getElementById('pp-role-badge').textContent = 'عضو';
+    }
+
+    // Only show if not logged in
+    const savedUser = localStorage.getItem('sa_user');
+    if (!savedUser) {
+        document.getElementById('landing-layer').classList.add('hidden');
+        layer.classList.remove('hidden');
+    }
+}
+
+window.goToAuthFromProfile = () => {
+    document.getElementById('profile-preview-layer').classList.add('hidden');
+    goToAuth();
+};
+
+window.dismissProfilePreview = () => {
+    document.getElementById('profile-preview-layer').classList.add('hidden');
+    document.getElementById('landing-layer').classList.remove('hidden');
+    _pendingChatUid = null;
+};
+
+// Call on load after DB is ready
+window.addEventListener('load', () => { setTimeout(checkProfilePreviewOnLoad, 800); });
+
+
+
+// ============================================================
+// SECTION HERO BANNERS - images per section
+// ============================================================
+const SECTION_HEROES = {
+    't-library':  { img: 'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=800&q=80', label: 'مكتبة الاختبارات', icon: 'fa-layer-group', color: '#3b82f6' },
+    't-reese':    { img: 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=800&q=80', label: 'Reese — الشبكة الاجتماعية', icon: 'fa-feather-alt', color: '#8b5cf6' },
+    't-dardasha': { img: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?w=800&q=80', label: 'الدردشة المباشرة', icon: 'fa-comment-dots', color: '#10b981' },
+    't-ai':       { img: 'https://images.unsplash.com/photo-1677756119517-756a188d2d94?w=800&q=80', label: 'المساعد الذكي', icon: 'fa-wand-magic-sparkles', color: '#a855f7' },
+    't-daftar':   { img: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=800&q=80', label: 'دفتري الذكي', icon: 'fa-book-open', color: '#f59e0b' },
+    's-exams':    { img: 'https://images.unsplash.com/photo-1606326608606-aa0b62935f2b?w=800&q=80', label: 'الاختبارات', icon: 'fa-book-open', color: '#3b82f6' },
+    's-reese':    { img: 'https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=800&q=80', label: 'Reese — الشبكة الاجتماعية', icon: 'fa-feather-alt', color: '#8b5cf6' },
+    's-dardasha': { img: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?w=800&q=80', label: 'الدردشة المباشرة', icon: 'fa-comment-dots', color: '#10b981' },
+    's-ai':       { img: 'https://images.unsplash.com/photo-1677756119517-756a188d2d94?w=800&q=80', label: 'المساعد الذكي', icon: 'fa-wand-magic-sparkles', color: '#a855f7' },
+    's-daftar':   { img: 'https://images.unsplash.com/photo-1517842645767-c639042777db?w=800&q=80', label: 'دفتري الذكي', icon: 'fa-book-open', color: '#f59e0b' },
+};
+
+function injectSectionHero(sectionId) {
+    const h = SECTION_HEROES[sectionId];
+    if (!h) return;
+    const sec = document.getElementById(sectionId);
+    if (!sec || sec.querySelector('.section-hero-banner')) return;
+    const banner = document.createElement('div');
+    banner.className = 'section-hero-banner';
+    banner.style.cssText = `
+        width:100%; height:90px; border-radius:20px; overflow:hidden;
+        position:relative; margin-bottom:16px;
+        background:linear-gradient(135deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3)),
+                   url('${h.img}') center/cover;
+    `;
+    banner.innerHTML = `
+        <div style="position:absolute;inset:0;display:flex;align-items:center;padding:0 20px;gap:14px;">
+            <div style="width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,0.1);
+                        backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;
+                        border:1px solid rgba(255,255,255,0.2);">
+                <i class="fas ${h.icon}" style="font-size:1.2rem;color:${h.color};"></i>
+            </div>
+            <div>
+                <div style="font-size:1rem;font-weight:800;color:#fff;">${h.label}</div>
+                <div style="font-size:0.7rem;color:rgba(255,255,255,0.6);">SA EDU Platform</div>
+            </div>
+        </div>
+    `;
+    const spacer = sec.querySelector('.mobile-spacer, .mobile-spacer-sm');
+    if (spacer) spacer.after(banner);
+    else sec.prepend(banner);
+}
+
+
+
+// ============================================================
+// DAFTAR SMART NOTES
+// ============================================================
+let _daftarNotes = [];
+let _daftarCurrentId = null;
+let _daftarPages = [''];
+let _daftarCurrentPage = 0;
+const DAFTAR_STORE_KEY = 'sa_daftar_notes_v2';
+
+const NOTE_COLORS = ['#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#ec4899','#14b8a6'];
+const NOTE_EMOJIS = { default:'📝', summary:'📚', quote:'💬', todo:'✅', mindmap:'🧠' };
+
+function daftarLoadNotes() {
+    try {
+        _daftarNotes = JSON.parse(localStorage.getItem(DAFTAR_STORE_KEY) || '[]');
+    } catch(e) { _daftarNotes = []; }
+}
+
+function daftarSaveNotes() {
+    localStorage.setItem(DAFTAR_STORE_KEY, JSON.stringify(_daftarNotes));
+}
+
+function daftarRenderGrid() {
+    daftarLoadNotes();
+    const prefix = (typeof selectedRole !== 'undefined' && selectedRole === 'teacher') ? 't' : 's';
+    const grid = document.getElementById(`${prefix}-daftar-grid`);
+    if (!grid) return;
+
+    if (_daftarNotes.length === 0) {
+        grid.innerHTML = `
+            <div class="daftar-empty">
+                <i class="fas fa-book-open"></i>
+                <p>لا توجد ملاحظات بعد</p>
+                <small>ابدأ بكتابة ملاحظتك الأولى!</small>
+            </div>`;
+        return;
+    }
+    grid.innerHTML = '';
+    _daftarNotes.slice().reverse().forEach(note => {
+        const card = document.createElement('div');
+        card.className = 'daftar-note-card';
+        card.onclick = () => openDaftarEditor(note.id);
+        const plainText = (note.pages || []).map(p => p.replace(/<[^>]+>/g, '')).join(' ');
+        card.innerHTML = `
+            <div class="dnc-color-bar" style="background:${note.color || '#f59e0b'};"></div>
+            <div class="dnc-body">
+                <div class="dnc-emoji">${NOTE_EMOJIS[note.type] || '📝'}</div>
+                <div class="dnc-title">${note.title || 'بدون عنوان'}</div>
+                <div class="dnc-preview">${plainText.substring(0,120)}</div>
+                <div class="dnc-footer">
+                    <span class="dnc-date">${new Date(note.updatedAt||note.createdAt).toLocaleDateString('ar-EG')}</span>
+                    <button class="dnc-del" onclick="event.stopPropagation();daftarDeleteNote('${note.id}')">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>`;
+        grid.appendChild(card);
+    });
+}
+
+window.openDaftarEditor = (noteId, type = 'default') => {
+    daftarLoadNotes();
+    const modal = document.getElementById('daftar-editor-modal');
+    if (!modal) return;
+
+    if (noteId) {
+        const note = _daftarNotes.find(n => n.id === noteId);
+        if (!note) return;
+        _daftarCurrentId = noteId;
+        _daftarPages = note.pages && note.pages.length ? [...note.pages] : [''];
+        document.getElementById('daftar-note-title').value = note.title || '';
+    } else {
+        _daftarCurrentId = 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
+        _daftarPages = getDefaultPageContent(type);
+        document.getElementById('daftar-note-title').value = '';
+        // Store new note immediately
+        _daftarNotes.push({
+            id: _daftarCurrentId, type,
+            title: '', pages: [..._daftarPages],
+            color: NOTE_COLORS[Math.floor(Math.random()*NOTE_COLORS.length)],
+            createdAt: Date.now(), updatedAt: Date.now()
+        });
+        daftarSaveNotes();
+    }
+
+    _daftarCurrentPage = 0;
+    modal.classList.remove('hidden');
+    daftarRenderPages();
+};
+
+function getDefaultPageContent(type) {
+    if (type === 'summary') return ['<h2>عنوان الدرس</h2><p>اكتب ملخص الدرس هنا...</p><ul><li>نقطة أساسية</li><li>نقطة أساسية</li></ul>'];
+    if (type === 'quote') return ['<blockquote style="border-right:4px solid #f59e0b;padding-right:16px;color:#aaa;font-style:italic;">اكتب الاقتباس هنا...</blockquote><p>المصدر: </p>'];
+    if (type === 'todo') return ['<h2>قائمة المهام</h2><ul><li>✅ المهمة الأولى</li><li>⬜ المهمة الثانية</li><li>⬜ المهمة الثالثة</li></ul>'];
+    if (type === 'mindmap') return ['<h2>💡 الفكرة الرئيسية</h2><p>اكتب أفكارك وعصف ذهني هنا...</p><ul><li>فكرة فرعية 1</li><li>فكرة فرعية 2</li></ul>'];
+    return [''];
+}
+
+function daftarRenderPages() {
+    const scroll = document.getElementById('ded-pages-scroll');
+    if (!scroll) return;
+    scroll.innerHTML = '';
+    _daftarPages.forEach((content, i) => {
+        const page = document.createElement('div');
+        page.className = 'ded-page';
+        page.contentEditable = 'true';
+        page.setAttribute('data-page', i);
+        page.setAttribute('data-placeholder', 'ابدأ الكتابة هنا...');
+        page.innerHTML = content || '';
+        page.innerHTML += `<div class="ded-page-num-badge">${i+1}</div>`;
+        page.addEventListener('input', () => {
+            // Save page content (remove the badge before saving)
+            const clone = page.cloneNode(true);
+            clone.querySelectorAll('.ded-page-num-badge').forEach(b => b.remove());
+            _daftarPages[i] = clone.innerHTML;
+            daftarAutoSave();
+        });
+        page.addEventListener('focus', () => {
+            _daftarCurrentPage = i;
+            updatePageIndicator();
+        });
+        if (i === _daftarCurrentPage) {
+            page.style.scrollMarginTop = '20px';
+            setTimeout(() => { page.scrollIntoView({ behavior: 'smooth', block: 'start' }); page.focus(); }, 100);
+        }
+        scroll.appendChild(page);
+    });
+    updatePageIndicator();
+}
+
+function updatePageIndicator() {
+    const el = document.getElementById('ded-page-indicator');
+    if (el) el.textContent = `${_daftarCurrentPage + 1} / ${_daftarPages.length}`;
+}
+
+let _daftarAutoSaveTimer = null;
+function daftarAutoSave() {
+    clearTimeout(_daftarAutoSaveTimer);
+    _daftarAutoSaveTimer = setTimeout(saveDaftarNote, 1500);
+}
+
+window.saveDaftarNote = () => {
+    if (!_daftarCurrentId) return;
+    // Capture current live content from DOM
+    document.querySelectorAll('.ded-page').forEach((page, i) => {
+        const clone = page.cloneNode(true);
+        clone.querySelectorAll('.ded-page-num-badge').forEach(b => b.remove());
+        _daftarPages[i] = clone.innerHTML;
+    });
+    const title = document.getElementById('daftar-note-title')?.value || '';
+    const idx = _daftarNotes.findIndex(n => n.id === _daftarCurrentId);
+    if (idx !== -1) {
+        _daftarNotes[idx].title = title;
+        _daftarNotes[idx].pages = [..._daftarPages];
+        _daftarNotes[idx].updatedAt = Date.now();
+    }
+    daftarSaveNotes();
+    showToast('💾 تم الحفظ');
+};
+
+window.closeDaftarEditor = () => {
+    saveDaftarNote();
+    document.getElementById('daftar-editor-modal').classList.add('hidden');
+    daftarRenderGrid();
+};
+
+window.daftarDeleteNote = (id) => {
+    _daftarNotes = _daftarNotes.filter(n => n.id !== id);
+    daftarSaveNotes();
+    daftarRenderGrid();
+    showToast('🗑️ تم الحذف');
+};
+
+window.daftarAddPage = () => {
+    saveDaftarNote();
+    _daftarPages.push('');
+    _daftarCurrentPage = _daftarPages.length - 1;
+    daftarRenderPages();
+    showToast('📄 صفحة جديدة');
+};
+
+window.daftarNextPage = () => {
+    if (_daftarCurrentPage < _daftarPages.length - 1) {
+        _daftarCurrentPage++;
+        const pages = document.querySelectorAll('.ded-page');
+        if (pages[_daftarCurrentPage]) {
+            pages[_daftarCurrentPage].scrollIntoView({ behavior: 'smooth', block: 'start' });
+            pages[_daftarCurrentPage].focus();
+        }
+        updatePageIndicator();
+    }
+};
+
+window.daftarPrevPage = () => {
+    if (_daftarCurrentPage > 0) {
+        _daftarCurrentPage--;
+        const pages = document.querySelectorAll('.ded-page');
+        if (pages[_daftarCurrentPage]) {
+            pages[_daftarCurrentPage].scrollIntoView({ behavior: 'smooth', block: 'start' });
+            pages[_daftarCurrentPage].focus();
+        }
+        updatePageIndicator();
+    }
+};
+
+// Toolbar commands
+window.ded_cmd = (cmd) => { document.execCommand(cmd, false, null); };
+window.ded_color = (color) => { document.execCommand('foreColor', false, color); };
+window.ded_heading = (tag) => {
+    if (tag === 'blockquote') document.execCommand('formatBlock', false, 'blockquote');
+    else document.execCommand('formatBlock', false, tag);
+};
+
+window.daftarInsertImage = () => {
+    document.getElementById('daftar-img-input').click();
+};
+
+window.daftarHandleImage = (input) => {
+    if (!input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = `<img src="${e.target.result}" style="max-width:80%;border-radius:8px;display:block;margin:10px auto;" onclick="this.style.maxWidth=this.style.maxWidth==='100%'?'40%':'100%'">`;
+        document.execCommand('insertHTML', false, img);
+        input.value = '';
+    };
+    reader.readAsDataURL(input.files[0]);
+};
+
+// AI Enhance
+window.daftarAIEnhance = async () => {
+    saveDaftarNote();
+    const page = document.querySelector('.ded-page');
+    if (!page) return;
+    const text = page.innerText.substring(0, 800);
+    if (!text.trim()) return saAlert('الملاحظة فارغة!', 'info');
+
+    showToast('🤖 AI يحسّن ملاحظتك...');
+    try {
+        const prompt = `أنت مساعد تعليمي. قم بتحسين وتنظيم هذه الملاحظة الدراسية وأضف نقاط مهمة وعناوين واضحة. أعد النص HTML مباشرة بدون ```html أو أي markdown. النص:\n${text}`;
+        let result = await callPollinationsAI(prompt);
+        result = result.replace(/```html|```/g, '').trim();
+        page.innerHTML = result + `<div class="ded-page-num-badge">${_daftarCurrentPage+1}</div>`;
+        _daftarPages[_daftarCurrentPage] = result;
+        daftarAutoSave();
+        showToast('✨ تم التحسين بالذكاء الاصطناعي!');
+    } catch(e) {
+        showToast('❌ فشل الاتصال بـ AI');
+    }
+};
+
+// Export to PDF
+window.daftarExportPDF = async () => {
+    saveDaftarNote();
+    showToast('📄 جاري إنشاء PDF...');
+    try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+        const title = document.getElementById('daftar-note-title')?.value || 'ملاحظة';
+        pdf.setFont('helvetica');
+        
+        const pages = document.querySelectorAll('.ded-page');
+        for (let i = 0; i < pages.length; i++) {
+            if (i > 0) pdf.addPage();
+            // Use html2canvas to capture each page
+            const canvas = await html2canvas(pages[i], {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                logging: false
+            });
+            const imgData = canvas.toDataURL('image/jpeg', 0.92);
+            const w = pdf.internal.pageSize.getWidth();
+            const h = (canvas.height * w) / canvas.width;
+            pdf.addImage(imgData, 'JPEG', 0, 0, w, Math.min(h, pdf.internal.pageSize.getHeight()));
+        }
+        pdf.save(`${title || 'ملاحظة'}.pdf`);
+        showToast('✅ تم تحميل PDF!');
+    } catch(e) {
+        console.error(e);
+        showToast('❌ خطأ في إنشاء PDF');
+    }
+};
+
+function showToast(msg) {
+    if (typeof saAlert === 'function') return; // use existing
+    const t = document.createElement('div');
+    t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:10px 20px;border-radius:12px;z-index:99999;font-size:0.85rem;white-space:nowrap;';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 2500);
 }
