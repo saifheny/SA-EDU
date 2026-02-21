@@ -304,12 +304,16 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <section id="t-ai" class="app-section">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
                             <button class="ai-action-btn new-chat" onclick="startNewChat('t')" title="محادثة جديدة"><i class="fas fa-plus"></i></button>
-                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-history"></i></button>
+                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-clock-rotate-left"></i></button>
                             <button class="ai-action-btn incognito" id="t-incognito-btn" onclick="toggleIncognito('t')" title="محادثة مخفية"><i class="fas fa-user-secret"></i></button>
                         </div>
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:6px; color:#8e8ea0; font-size:0.82rem; font-weight:600;">
+                            <div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#10a37f,#1a7f64);display:flex;align-items:center;justify-content:center;"><i class="fas fa-comment-dots" style="font-size:0.6rem;color:#fff;"></i></div>
+                            SA AI
+                        </div>
+                        <div style="display:flex; gap:8px;">
                             <button class="ai-action-btn" onclick="shareCurrentChat()" title="مشاركة المحادثة"><i class="fas fa-share-nodes"></i></button>
                         </div>
                     </div>
@@ -317,13 +321,13 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     
                     <div class="gemini-input-wrapper">
                         <div class="gemini-input-container">
-                            <label for="t-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-camera"></i></label>
+                            <label for="t-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-paperclip"></i></label>
                             <input type="file" id="t-ai-file" hidden accept="image/*" onchange="previewChatImg('t')">
                             
-                            <input type="text" id="t-ai-input" class="gemini-text-input" placeholder="اكتب، تخيل، أنشئ..." oninput="toggleAiSendMic('t', this.value)">
+                            <input type="text" id="t-ai-input" class="gemini-text-input" placeholder="أرسل رسالة لـ SA AI..." oninput="toggleAiSendMic('t', this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg('t');}">
                             
                             <button id="t-mic-btn" class="gemini-mic-btn" onclick="startVoiceInput('t')" title="إدخال صوتي"><i class="fas fa-microphone"></i></button>
-                            <button id="t-send-btn" onclick="sendAiMsg('t')" class="gemini-send-btn" style="display:none"><i class="fas fa-paper-plane"></i></button>
+                            <button id="t-send-btn" onclick="sendAiMsg('t')" class="gemini-send-btn" style="display:none"><i class="fas fa-arrow-up"></i></button>
                         </div>
                         <div id="t-chat-preview" class="chat-img-preview">
                             <i class="fas fa-times" onclick="clearChatImg('t')"></i>
@@ -461,12 +465,16 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <section id="s-ai" class="app-section">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; gap:8px; align-items:center;">
                             <button class="ai-action-btn new-chat" onclick="startNewChat('s')" title="محادثة جديدة"><i class="fas fa-plus"></i></button>
-                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-history"></i></button>
+                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-clock-rotate-left"></i></button>
                             <button class="ai-action-btn incognito" id="s-incognito-btn" onclick="toggleIncognito('s')" title="محادثة مخفية"><i class="fas fa-user-secret"></i></button>
                         </div>
-                        <div style="display:flex; gap:10px;">
+                        <div style="display:flex; align-items:center; gap:6px; color:#8e8ea0; font-size:0.82rem; font-weight:600;">
+                            <div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#10a37f,#1a7f64);display:flex;align-items:center;justify-content:center;"><i class="fas fa-comment-dots" style="font-size:0.6rem;color:#fff;"></i></div>
+                            SA AI
+                        </div>
+                        <div style="display:flex; gap:8px;">
                             <button class="ai-action-btn" onclick="shareCurrentChat()" title="مشاركة المحادثة"><i class="fas fa-share-nodes"></i></button>
                         </div>
                     </div>
@@ -474,15 +482,15 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     
                     <div class="gemini-input-wrapper">
                         <div class="gemini-input-container">
-                            <label for="s-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-camera"></i></label>
+                            <label for="s-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-paperclip"></i></label>
                             <input type="file" id="s-ai-file" hidden accept="image/*" onchange="previewChatImg('s')">
                             
-                            <input type="text" id="s-ai-input" class="gemini-text-input" placeholder="اسألني عن أي شيء..." oninput="toggleAiSendMic('s', this.value)">
+                            <input type="text" id="s-ai-input" class="gemini-text-input" placeholder="أرسل رسالة لـ SA AI..." oninput="toggleAiSendMic('s', this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg('s');}">
                             
                             <button id="s-mic-btn" class="gemini-mic-btn" onclick="startVoiceInput('s')" title="إدخال صوتي"><i class="fas fa-microphone"></i></button>
-                            <button id="s-send-btn" onclick="sendAiMsg('s')" class="gemini-send-btn" style="display:none"><i class="fas fa-paper-plane"></i></button>
+                            <button id="s-send-btn" onclick="sendAiMsg('s')" class="gemini-send-btn" style="display:none"><i class="fas fa-arrow-up"></i></button>
                         </div>
-                         <div id="s-chat-preview" class="chat-img-preview">
+                        <div id="s-chat-preview" class="chat-img-preview">
                             <i class="fas fa-times" onclick="clearChatImg('s')"></i>
                             <img src="" id="s-chat-img-tag">
                         </div>
