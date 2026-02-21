@@ -131,7 +131,8 @@ function initSwipeNavigation(portalId) {
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
 
-        const newIdx = dx < 0 ? idx + 1 : idx - 1;
+        // RTL: swipe right (dx > 0) goes to next tab (higher index), swipe left goes back
+        const newIdx = dx > 0 ? idx + 1 : idx - 1;
         if (newIdx < 0 || newIdx >= tabs.length) return;
 
         const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
@@ -317,7 +318,7 @@ window.saAlert = (msg, type = 'info', title = null) => {
     modal.classList.add('active');
 };
 
-window.saConfirm = (msg, onConfirm) => {
+window.saConfirm = (msg, onConfirm, yesLabel = 'نعم، متابعة', yesColor = 'var(--warning)') => {
     playSound('click');
     const modal = document.getElementById('sa-custom-alert');
     document.getElementById('sa-alert-icon').innerHTML = '<i class="fas fa-question-circle" style="color:var(--warning)"></i>';
@@ -326,7 +327,7 @@ window.saConfirm = (msg, onConfirm) => {
     const actionsDiv = document.getElementById('sa-alert-actions');
     actionsDiv.innerHTML = '';
     const btnYes = document.createElement('button');
-    btnYes.className = 'sa-btn sa-btn-primary'; btnYes.innerText = 'نعم، متابعة'; btnYes.style.background = 'var(--warning)';
+    btnYes.className = 'sa-btn sa-btn-primary'; btnYes.innerText = yesLabel; btnYes.style.background = yesColor;
     btnYes.onclick = () => { closeSaAlert(); onConfirm(); };
     const btnNo = document.createElement('button');
     btnNo.className = 'sa-btn sa-btn-secondary'; btnNo.innerText = 'إلغاء';
@@ -630,11 +631,15 @@ async function handleDeepLinks() {
             updateOGMeta(`محادثة مع ${otherName}`, `افتح المحادثة مع ${otherName} على SA EDU`);
             switchTab(`${prefix}-dardasha`);
             hideDeepLinkLoader();
-            openChatRoom(chatRoom, otherName, otherIcon, otherUid);
+            // Show dialog asking if they want to open the chat
+            saConfirm(`هل تريد فتح الدردشة مع ${otherName}؟`, () => {
+                openChatRoom(chatRoom, otherName, otherIcon, otherUid);
+            }, 'دردشة', 'var(--accent-primary)');
         } else {
             switchTab(`${prefix}-dardasha`);
             hideDeepLinkLoader();
         }
+        window.history.replaceState({}, document.title, window.location.pathname);
         return;
     }
 
@@ -651,18 +656,22 @@ async function handleDeepLinks() {
         }
         switchTab(`${prefix}-dardasha`);
         hideDeepLinkLoader();
-        const existingSnap = await get(ref(db, `user_chats/${myUid}`)).catch(() => null);
-        let existingChatId = null;
-        if (existingSnap?.exists()) {
-            for (const [cid, cinfo] of Object.entries(existingSnap.val())) {
-                if (cinfo.otherUid === chatUid) { existingChatId = cid; break; }
+        window.history.replaceState({}, document.title, window.location.pathname);
+        // Show dialog asking if they want to start chat
+        saConfirm(`هل تريد بدء الدردشة مع ${otherName}؟`, async () => {
+            const existingSnap = await get(ref(db, `user_chats/${myUid}`)).catch(() => null);
+            let existingChatId = null;
+            if (existingSnap?.exists()) {
+                for (const [cid, cinfo] of Object.entries(existingSnap.val())) {
+                    if (cinfo.otherUid === chatUid) { existingChatId = cid; break; }
+                }
             }
-        }
-        if (existingChatId) {
-            openChatRoom(existingChatId, otherName, otherIcon, chatUid);
-        } else {
-            searchUserById(chatUid);
-        }
+            if (existingChatId) {
+                openChatRoom(existingChatId, otherName, otherIcon, chatUid);
+            } else {
+                searchUserById(chatUid);
+            }
+        }, 'دردشة', 'var(--accent-primary)');
         return;
     }
 
@@ -1435,15 +1444,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
                 onkeypress="handleChatEnter(event,'${chatId}','${uid}')"
                 oninput="toggleChatMicSend('${chatId}')"
                 onfocus="handleChatInputFocus(this)">
-            <button id="chat-send-btn-${chatId}" class="send-btn" style="display:none" onclick="sendChatMessage('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
-            <button id="chat-mic-btn-${chatId}" class="send-btn mic-idle-btn" onclick="startChatSpeech('${chatId}','${uid}')"><i class="ph-bold ph-microphone"></i></button>
-        </div>
-        <div id="voice-recording-bar-${chatId}" class="voice-recording-bar hidden">
-            <div class="voice-wave-anim"><span></span><span></span><span></span><span></span><span></span></div>
-            <span id="voice-timer-${chatId}" style="color:#ef4444;font-weight:700;font-size:0.85rem;min-width:38px;">0:00</span>
-            <div style="flex:1;"></div>
-            <button onclick="cancelChatSpeech('${chatId}')" class="speech-cancel-btn"><i class="ph-bold ph-x"></i></button>
-            <button onclick="stopAndSendVoiceMsg('${chatId}','${uid}')" class="speech-send-btn"><i class="ph-bold ph-paper-plane-tilt"></i></button>
+            <button id="chat-send-btn-${chatId}" class="send-btn" onclick="sendChatMessage('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
         </div>
     `;
 
@@ -1643,12 +1644,7 @@ window.deleteChatMsg = async (chatId, msgKey, otherUid) => {
 };
 
 window.toggleChatMicSend = (chatId) => {
-    const inp = document.getElementById(`chat-input-${chatId}`);
-    const send = document.getElementById(`chat-send-btn-${chatId}`);
-    const mic = document.getElementById(`chat-mic-btn-${chatId}`);
-    if (!inp || !send || !mic) return;
-    if (inp.value.trim()) { send.style.display = 'flex'; mic.style.display = 'none'; }
-    else { send.style.display = 'none'; mic.style.display = 'flex'; }
+    // Voice removed - send button always visible
 };
 
 window.sendChatImages = async (input, chatId, otherUid) => {
@@ -1679,21 +1675,18 @@ window.closeChatWindow = (prefix) => {
 };
 
 window.handleChatInputFocus = (input) => {
-    // Add focused class to parent input area for visual enhancement
+    // Add visual focus state
     const inputArea = input.closest('.chat-input-area');
     if (inputArea) {
         inputArea.classList.add('focused');
         input.addEventListener('blur', () => inputArea.classList.remove('focused'), { once: true });
     }
-
-    if (window.innerWidth > 768) return;
-    
-    setTimeout(() => {
-        input.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        const chatId = input.id.replace('chat-input-', '');
-        const msgArea = document.getElementById(`chat-msgs-${chatId}`);
-        if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
-    }, 350);
+    // Scroll messages to bottom
+    const chatId = input.id.replace('chat-input-', '');
+    const msgArea = document.getElementById(`chat-msgs-${chatId}`);
+    if (msgArea) {
+        setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 300);
+    }
 };
 
 window.handleChatEnter = (e, chatId, otherUid) => {
@@ -2080,9 +2073,9 @@ window.renderAiWelcome = (prefix) => {
 
     msgs.innerHTML = `
         <div class="ai-welcome-screen">
-            <div class="ai-logo-large"><i class="fas fa-wand-magic-sparkles"></i></div>
-            <h3 class="ai-welcome-title">مرحباً ${firstName} 👋</h3>
-            <p class="ai-welcome-text">أنا مساعدك الذكي SA AI. <br>${roleDesc}</p>
+            <div class="ai-logo-large"><i class="fas fa-comment-dots"></i></div>
+            <h3 class="ai-welcome-title">أهلاً، ${firstName}!</h3>
+            <p class="ai-welcome-text">${roleDesc}</p>
             <div class="ai-chips" id="ai-welcome-chips-${prefix}">
             </div>
         </div>`;
