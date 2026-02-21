@@ -132,7 +132,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <button class="nav-btn" onclick="switchTab('t-reese', this)"><i class="fas fa-feather-alt"></i><span>ريس</span></button>
                 <button class="nav-btn" onclick="switchTab('t-dardasha', this)"><i class="fab fa-telegram-plane"></i><span>دردشة</span></button>
                 <button class="nav-btn magic-btn" onclick="switchTab('t-ai', this)"><i class="fas fa-wand-magic-sparkles"></i><span>AI</span></button>
-                <button class="nav-btn" onclick="switchTab('t-editor', this)"><i class="fas fa-pen-nib"></i><span>محرر</span></button>
                 <button class="nav-btn" onclick="toggleMenu()"><i class="fas fa-bars"></i><span>القائمة</span></button>
             </div>
         </nav>
@@ -240,7 +239,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     </select>
                     <input type="number" id="new-test-duration" class="smart-input" placeholder="المدة (د)" style="width: 100px; text-align: center;">
                 </div>
-                <select id="new-test-subject" class="smart-input" style="margin-top:0; border-color: rgba(255,255,255,0.1);" required>
+                <select id="new-test-subject" class="smart-input" style="margin-top:0; border-color: rgba(255,255,255,0.1);" required onchange="checkCustomSubject(this)">
                     <option value="" disabled selected>📚 اختر المادة (مطلوب) *</option>
                     <option value="رياضيات">📐 رياضيات</option>
                     <option value="فيزياء">⚡ فيزياء</option>
@@ -251,11 +250,14 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     <option value="تاريخ">🏛️ تاريخ</option>
                     <option value="جغرافيا">🗺️ جغرافيا</option>
                     <option value="علوم">🔬 علوم</option>
+                    <option value="علوم متكاملة">🧬 علوم متكاملة</option>
                     <option value="حاسب آلي">💻 حاسب آلي</option>
                     <option value="دراسات اجتماعية">📚 دراسات اجتماعية</option>
                     <option value="تربية دينية">🕌 تربية دينية</option>
                     <option value="أخرى">📝 أخرى</option>
+                    <option value="custom_subject" style="color: var(--accent-gold);">✏️ اكتب المادة بنفسك...</option>
                 </select>
+                <input type="text" id="custom-subject-input" class="smart-input hidden" placeholder="اكتب اسم المادة هنا..." style="border-color: var(--accent-gold); margin-top: 0;">
                 <input type="text" id="custom-grade-input" class="smart-input hidden" placeholder="اكتب اسم الصف هنا..." style="border-color: var(--accent-gold);">
                 <div id="q-editor-box" style="background: #151515; padding: 20px; border-radius: 20px; border: 1px solid #333; margin-top: 20px;">
                     <h3 style="font-size: 1rem; color: #888; margin-top: 0; margin-bottom: 15px;">إضافة سؤال</h3>
@@ -331,35 +333,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="t-editor" class="app-section smart-editor-section">
-                <div class="mobile-spacer"></div>
-                <div class="editor-toolbar">
-                    <div class="editor-tool-group">
-                        <button class="editor-tool-btn" onclick="editorFormat('bold')" title="عريض"><i class="fas fa-bold"></i></button>
-                        <button class="editor-tool-btn" onclick="editorFormat('italic')" title="مائل"><i class="fas fa-italic"></i></button>
-                        <button class="editor-tool-btn" onclick="editorFormat('underline')" title="تحته خط"><i class="fas fa-underline"></i></button>
-                    </div>
-                    <div class="editor-tool-group">
-                        <select class="editor-select" onchange="editorFontSize(this.value)">
-                            <option value="3">عادي</option>
-                            <option value="5">كبير</option>
-                            <option value="6">أكبر</option>
-                            <option value="2">صغير</option>
-                        </select>
-                        <input type="color" class="editor-color-pick" onchange="editorColor(this.value)" title="لون النص" value="#ffffff">
-                    </div>
-                    <div class="editor-tool-group">
-                        <button class="editor-tool-btn" onclick="editorInsertImage()" title="إدراج صورة"><i class="fas fa-image"></i></button>
-                        <button class="editor-tool-btn" onclick="editorAddPage()" title="صفحة جديدة"><i class="fas fa-plus-square"></i></button>
-                        <button class="editor-tool-btn" onclick="editorExportPDF()" title="تصدير PDF"><i class="fas fa-file-pdf" style="color:#ef4444;"></i></button>
-                        <button class="editor-tool-btn" onclick="editorSave()" title="حفظ"><i class="fas fa-save" style="color:#10b981;"></i></button>
-                    </div>
-                </div>
-                <div class="editor-pages-container" id="t-editor-pages">
-                    <div class="editor-page" contenteditable="true" dir="rtl" data-page="1"></div>
-                </div>
-                <input type="file" id="t-editor-img-input" hidden accept="image/*" onchange="editorHandleImage(this)">
-            </section>
+
         </div>
     </div>
     <div id="student-app" class="hidden">
@@ -369,7 +343,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <button class="nav-btn" onclick="switchTab('s-reese', this)"><i class="fas fa-feather-alt"></i><span>ريس</span></button>
                 <button class="nav-btn" onclick="switchTab('s-dardasha', this)"><i class="fab fa-telegram-plane"></i><span>دردشة</span></button>
                 <button class="nav-btn magic-btn" onclick="switchTab('s-ai', this)"><i class="fas fa-wand-magic-sparkles"></i><span>AI</span></button>
-                <button class="nav-btn" onclick="switchTab('s-editor', this)"><i class="fas fa-pen-nib"></i><span>محرر</span></button>
                 <button class="nav-btn" onclick="toggleMenu()"><i class="fas fa-bars"></i><span>القائمة</span></button>
             </div>
         </nav>
@@ -519,35 +492,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
 
             </section>
 
-            <section id="s-editor" class="app-section smart-editor-section">
-                <div class="mobile-spacer"></div>
-                <div class="editor-toolbar">
-                    <div class="editor-tool-group">
-                        <button class="editor-tool-btn" onclick="editorFormat('bold')" title="عريض"><i class="fas fa-bold"></i></button>
-                        <button class="editor-tool-btn" onclick="editorFormat('italic')" title="مائل"><i class="fas fa-italic"></i></button>
-                        <button class="editor-tool-btn" onclick="editorFormat('underline')" title="تحته خط"><i class="fas fa-underline"></i></button>
-                    </div>
-                    <div class="editor-tool-group">
-                        <select class="editor-select" onchange="editorFontSize(this.value)">
-                            <option value="3">عادي</option>
-                            <option value="5">كبير</option>
-                            <option value="6">أكبر</option>
-                            <option value="2">صغير</option>
-                        </select>
-                        <input type="color" class="editor-color-pick" onchange="editorColor(this.value)" title="لون النص" value="#ffffff">
-                    </div>
-                    <div class="editor-tool-group">
-                        <button class="editor-tool-btn" onclick="editorInsertImage()" title="إدراج صورة"><i class="fas fa-image"></i></button>
-                        <button class="editor-tool-btn" onclick="editorAddPage()" title="صفحة جديدة"><i class="fas fa-plus-square"></i></button>
-                        <button class="editor-tool-btn" onclick="editorExportPDF()" title="تصدير PDF"><i class="fas fa-file-pdf" style="color:#ef4444;"></i></button>
-                        <button class="editor-tool-btn" onclick="editorSave()" title="حفظ"><i class="fas fa-save" style="color:#10b981;"></i></button>
-                    </div>
-                </div>
-                <div class="editor-pages-container" id="s-editor-pages">
-                    <div class="editor-page" contenteditable="true" dir="rtl" data-page="1"></div>
-                </div>
-                <input type="file" id="s-editor-img-input" hidden accept="image/*" onchange="editorHandleImage(this)">
-            </section>
+
 
             <section id="s-taking-test" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 800px; margin: auto;">
