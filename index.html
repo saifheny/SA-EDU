@@ -819,14 +819,13 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
     </div>
 
     <div id="profile-deeplink-modal" class="hidden">
-        <div class="pdl-inner">
+        <div class="bottom-sheet-content" style="background:#111; text-align:center; max-width:400px; margin:auto;">
             <div class="avatar-frame" id="pdl-avatar" style="width:80px;height:80px;font-size:2.5rem;margin:0 auto 15px;"></div>
-            <h3 id="pdl-name" style="margin:0 0 5px;font-size:1.2rem;"></h3>
+            <h3 id="pdl-name" style="margin:0 0 5px;"></h3>
             <span id="pdl-role" style="font-size:0.8rem;background:#333;padding:3px 12px;border-radius:15px;color:#aaa;"></span>
-            <p class="pdl-question" id="pdl-question">هل تريد التحدث مع هذا الشخص؟</p>
-            <div style="display:flex;gap:10px;margin-top:10px;">
-                <button onclick="document.getElementById('profile-deeplink-modal').classList.add('hidden')" class="modern-btn secondary" style="flex:1;"><i class="fas fa-times"></i> إلغاء</button>
-                <button id="pdl-chat-btn" class="modern-btn" style="flex:1;background:var(--accent-primary);"><i class="fas fa-comment"></i> دردشة</button>
+            <div style="display:flex;gap:10px;margin-top:25px;">
+                <button onclick="document.getElementById('profile-deeplink-modal').classList.add('hidden')" class="modern-btn secondary" style="flex:1;">إلغاء</button>
+                <button id="pdl-chat-btn" class="modern-btn" style="flex:1;background:var(--accent-primary);">بدء الدردشة <i class="fas fa-comment"></i></button>
             </div>
         </div>
     </div>
