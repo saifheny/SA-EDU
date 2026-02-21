@@ -3660,3 +3660,206 @@ transform: translateX(0) translateY(0);
 #s-exam-result {
     z-index: 3100;
 }
+
+/* ============================================================ 
+   AI THINKING AVATAR + ORB ANIMATION
+   ============================================================ */
+.ai-thinking-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 18px;
+}
+.ai-thinking-orb {
+    position: relative;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.ai-orb-ring {
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--accent-primary);
+    animation: orbSpin 1.2s linear infinite;
+}
+.ai-orb-ring { width: 44px; height: 44px; }
+.ai-orb-ring2 { width: 32px; height: 32px; border-top-color: #a855f7; animation-duration: 0.9s; animation-direction: reverse; }
+.ai-orb-ring3 { width: 20px; height: 20px; border-top-color: var(--accent-gold); animation-duration: 0.6s; }
+@keyframes orbSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.ai-orb-icon {
+    color: var(--accent-primary);
+    font-size: 0.8rem;
+    position: relative;
+    z-index: 1;
+    animation: orbPulse 1.5s ease-in-out infinite;
+}
+@keyframes orbPulse {
+    0%, 100% { opacity: 0.6; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+.ai-thinking-dots {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+.ai-thinking-dots span {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    animation: thinkDot 1.4s ease-in-out infinite;
+}
+.ai-thinking-dots span:nth-child(2) { animation-delay: 0.2s; background: #a855f7; }
+.ai-thinking-dots span:nth-child(3) { animation-delay: 0.4s; background: var(--accent-gold); }
+@keyframes thinkDot {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+}
+
+/* AI Message Avatar */
+.ai-msg-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-primary), #a855f7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    color: #fff;
+    flex-shrink: 0;
+    margin-top: 4px;
+    align-self: flex-start;
+    box-shadow: 0 2px 10px rgba(59,130,246,0.3);
+}
+.chat-msg-wrap.ai {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+/* ============================================================ 
+   DARDASHA EMPTY STATE ANIMATION
+   ============================================================ */
+.dardasha-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+}
+.dardasha-empty-avatar {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+.dardasha-orb-pulse {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(59,130,246,0.15) 0%, transparent 70%);
+    animation: dardashaPulse 2s ease-in-out infinite;
+}
+@keyframes dardashaPulse {
+    0%, 100% { transform: scale(0.8); opacity: 0.5; }
+    50% { transform: scale(1.2); opacity: 1; }
+}
+.dardasha-empty-icon {
+    font-size: 2.5rem;
+    color: var(--accent-primary);
+    position: relative;
+    z-index: 1;
+    animation: dardashaBounce 2s ease-in-out infinite;
+}
+@keyframes dardashaBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+.dardasha-start-btn {
+    background: linear-gradient(135deg, var(--accent-primary), #a855f7);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 25px;
+    font-family: var(--font-main);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.3);
+    animation: dardashaBtnPulse 3s ease-in-out infinite;
+}
+.dardasha-start-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 25px rgba(59,130,246,0.5);
+}
+@keyframes dardashaBtnPulse {
+    0%, 100% { box-shadow: 0 4px 20px rgba(59,130,246,0.3); }
+    50% { box-shadow: 0 4px 30px rgba(168,85,247,0.5); }
+}
+
+/* ============================================================ 
+   REESE SECTION - REDUCE TOP SPACING
+   ============================================================ */
+#t-reese.app-section, #s-reese.app-section {
+    padding-top: 10px !important;
+}
+#t-reese .mobile-spacer, #s-reese .mobile-spacer {
+    height: 55px !important;
+}
+
+/* ============================================================ 
+   TELEGRAM STYLE CHAT BACKGROUND
+   ============================================================ */
+.chat-msgs-area {
+    background-color: #0a0d14;
+    background-image: 
+        radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 75% 75%, rgba(168, 85, 247, 0.04) 0%, transparent 50%),
+        url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.015'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.chat-msgs-area .chat-bubble.mine {
+    background: linear-gradient(135deg, #1b4fc7, #3b82f6) !important;
+}
+
+/* ============================================================ 
+   INPUT BAR EXPAND ON FOCUS
+   ============================================================ */
+.chat-input-area {
+    transition: all 0.25s ease;
+}
+.chat-input-area.focused {
+    padding: 14px 15px !important;
+    background: #060606 !important;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+}
+.chat-input-area input:focus {
+    border-color: var(--accent-primary) !important;
+    background: #111 !important;
+    box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+/* ============================================================
+   GEMINI INPUT WRAPPER FOCUS EXPAND
+   ============================================================ */
+.gemini-input-wrapper {
+    transition: all 0.25s ease;
+}
+.gemini-input-container:focus-within {
+    border-color: var(--accent-primary) !important;
+    background: rgba(59,130,246,0.05) !important;
+    box-shadow: 0 0 20px rgba(59,130,246,0.15), 0 0 0 2px rgba(59,130,246,0.1) !important;
+}
