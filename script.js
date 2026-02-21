@@ -16,6 +16,24 @@ const db = getDatabase(app);
 
 let selectedRole = 'student'; 
 let currentUser = null;
+
+// ── DEEPLINK: Save URL params before login so they survive auth ──────────────
+(function savePendingDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const hasLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
+    if (hasLink) {
+        localStorage.setItem('sa_pending_deeplink', window.location.search);
+        // Show a banner so user knows something is waiting
+        const banner = document.createElement('div');
+        banner.className = 'pending-link-banner';
+        banner.innerHTML = '<i class="fas fa-link"></i> سجّل دخولك لفتح الرابط المشارك';
+        banner.id = 'pending-link-banner';
+        document.body.appendChild(banner);
+        // Remove params from URL bar (cleaner look), keep hash
+        const cleanUrl = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+})();
 let currentQuestions = [];
 let currentImgBase64 = null;
 let aiGenImgBase64 = null;
@@ -533,8 +551,9 @@ function updateOGMeta(title, description, imageUrl) {
     set('link[rel="canonical"]', 'href', fullUrl);
 }
 
-async function handleDeepLinks() {
-    const params = new URLSearchParams(window.location.search);
+async function handleDeepLinks(params) {
+    if (!params) params = window._pendingDLParams || new URLSearchParams(window.location.search);
+    window._pendingDLParams = null;
     const shareId  = params.get('shareId');
     const examId   = params.get('examId');
     const postId   = params.get('postId');
@@ -695,11 +714,30 @@ function hideDeepLinkLoader() {
 }
 
 function handleDeepLinksAndRouting() {
-    const params = new URLSearchParams(window.location.search);
-    const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
-    
+    // Remove pending link banner if shown
+    const banner = document.getElementById('pending-link-banner');
+    if (banner) banner.remove();
+
+    // Check current URL params first, then fallback to saved pending deeplink
+    let params = new URLSearchParams(window.location.search);
+    let hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
+
+    if (!hasDeepLink) {
+        const saved = localStorage.getItem('sa_pending_deeplink');
+        if (saved) {
+            params = new URLSearchParams(saved);
+            hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
+            if (hasDeepLink) {
+                // Temporarily set search so handleDeepLinks can read it
+                const origSearch = window.location.search;
+                Object.defineProperty(window, '_pendingDLParams', { value: params, configurable: true, writable: true });
+            }
+        }
+    }
+    localStorage.removeItem('sa_pending_deeplink');
+
     if (hasDeepLink) {
-        handleDeepLinks();
+        handleDeepLinks(params);
         return;
     }
     
@@ -2052,45 +2090,36 @@ window.renderAiWelcome = (prefix) => {
     const msgs = document.getElementById(`${prefix}-ai-msgs`);
     const firstName = currentUser.split(' ')[0];
     
-    let roleSpecificChips = '';
     let roleDesc = '';
+    let chipsData = [];
 
     if (selectedRole === 'teacher') {
-        roleDesc = 'يمكنني مساعدتك في إنشاء الاختبارات، تحضير الدروس، وإدارة الطلاب.';
-        roleSpecificChips = `
-            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'أنشئ اختبار عن الكيمياء العضوية')"><i class="fas fa-flask"></i> إنشاء اختبار</div>
-            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'اكتب خطة درس عن التاريخ الحديث')"><i class="fas fa-book"></i> تحضير درس</div>
-            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'كيف أجعل الحصة تفاعلية أكثر؟')"><i class="fas fa-users"></i> نصائح تفاعلية</div>
-        `;
+        roleDesc = 'كيف يمكنني مساعدتك اليوم؟';
+        chipsData = [
+            { icon: 'fas fa-flask', text: 'أنشئ اختبار عن الكيمياء العضوية' },
+            { icon: 'fas fa-book', text: 'اكتب خطة درس عن التاريخ الحديث' },
+            { icon: 'fas fa-users', text: 'كيف أجعل الحصة تفاعلية أكثر؟' },
+            { icon: 'fas fa-chart-bar', text: 'ساعدني في تحليل نتائج الطلاب' },
+        ];
     } else {
-        roleDesc = 'أنا هنا لمساعدتك في المذاكرة، شرح الدروس، وحل المسائل الصعبة.';
-        roleSpecificChips = `
-            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'اشرح لي قانون نيوتن الثاني ببساطة')"><i class="fas fa-atom"></i> شرح درس</div>
-            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'لخص لي أحداث الحرب العالمية الأولى')"><i class="fas fa-history"></i> تلخيص</div>
-            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'ساعدني في تنظيم وقت المذاكرة')"><i class="fas fa-clock"></i> تنظيم الوقت</div>
-        `;
+        roleDesc = 'كيف يمكنني مساعدتك اليوم؟';
+        chipsData = [
+            { icon: 'fas fa-atom', text: 'اشرح لي قانون نيوتن الثاني ببساطة' },
+            { icon: 'fas fa-history', text: 'لخص أحداث الحرب العالمية الأولى' },
+            { icon: 'fas fa-calculator', text: 'ساعدني في حل مسألة رياضيات' },
+            { icon: 'fas fa-clock', text: 'ساعدني في تنظيم وقت المذاكرة' },
+        ];
     }
 
     msgs.innerHTML = `
         <div class="ai-welcome-screen">
-            <div class="ai-logo-large"><i class="fas fa-comment-dots"></i></div>
-            <h3 class="ai-welcome-title">أهلاً، ${firstName}!</h3>
+            <div class="ai-logo-large"><i class="fas fa-wand-magic-sparkles"></i></div>
+            <h3 class="ai-welcome-title">مرحباً، ${firstName}</h3>
             <p class="ai-welcome-text">${roleDesc}</p>
-            <div class="ai-chips" id="ai-welcome-chips-${prefix}">
-            </div>
+            <div class="ai-chips" id="ai-welcome-chips-${prefix}"></div>
         </div>`;
 
-    // Add chips safely via JS to avoid quote escaping issues
     const chipsContainer = document.getElementById(`ai-welcome-chips-${prefix}`);
-    const chipsData = selectedRole === 'teacher' ? [
-        { icon: 'fas fa-flask', text: 'أنشئ اختبار عن الكيمياء العضوية' },
-        { icon: 'fas fa-book', text: 'اكتب خطة درس عن التاريخ الحديث' },
-        { icon: 'fas fa-users', text: 'كيف أجعل الحصة تفاعلية أكثر؟' },
-    ] : [
-        { icon: 'fas fa-atom', text: 'اشرح لي قانون نيوتن الثاني ببساطة' },
-        { icon: 'fas fa-history', text: 'لخص لي أحداث الحرب العالمية الأولى' },
-        { icon: 'fas fa-clock', text: 'ساعدني في تنظيم وقت المذاكرة' },
-    ];
     chipsData.forEach(c => {
         const chip = document.createElement('div');
         chip.className = 'ai-chip';
@@ -2254,7 +2283,7 @@ window.loadSharedChat = async (shareId, prefix) => {
         }
         isIncognito = false;
         saveChatToFirebase();
-        msgs.innerHTML = `<div style="text-align:center; background:#222; padding:5px; margin-bottom:10px; font-size:0.8rem; border-radius:10px; color:#aaa;">📨 محادثة مشاركة من ${data.author || 'مجهول'} — يمكنك الاستمرار في المحادثة</div>`;
+        msgs.innerHTML = `<div class="shared-chat-banner"><i class="fas fa-share-nodes"></i> محادثة مشاركة من <strong>${data.author || 'مجهول'}</strong> — يمكنك الاستمرار في المحادثة</div>`;
         currentChatMessages.forEach(msg => { renderMessageUI(prefix, msg.role, msg.content, msg.image); });
         window.history.replaceState({}, document.title, window.location.pathname);
     } else { saAlert("رابط المشاركة غير صالح أو منتهي", "error"); startNewChat(prefix); }
