@@ -29,8 +29,8 @@ let reeseImages = [];
 let myUid = null;
 let activeChatRoomId = null;
 
-const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai', 't-editor'];
-const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai', 's-editor'];
+const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai'];
+const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai'];
 let _suppressHistoryPush = false;
 
 let _swipeStartX = 0;
@@ -279,7 +279,17 @@ function getEmptyStateHTML(type) {
     } else if (type === 'exams') {
         return `<div class="empty-state-container"><div class="empty-avatar"><i class="fas fa-folder-open" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد اختبارات</h3><p style="color:#555; font-size:0.9rem;">استمتع بوقتك، لا يوجد ضغط الآن.</p></div>`;
     } else if (type === 'chats') {
-        return `<div class="empty-state-container"><div class="empty-avatar"><i class="fab fa-telegram-plane" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد محادثات</h3><p style="color:#555; font-size:0.9rem;">ابحث عن أصدقاء لبدء الدردشة.</p></div>`;
+        return `<div class="empty-state-container dardasha-empty-state">
+            <div class="dardasha-empty-avatar">
+                <div class="dardasha-orb-pulse"></div>
+                <i class="fab fa-telegram-plane dardasha-empty-icon"></i>
+            </div>
+            <h3 style="color:#888; margin: 15px 0 8px;">لا توجد محادثات بعد</h3>
+            <p style="color:#555; font-size:0.9rem; margin-bottom: 20px;">ابدأ محادثة مع أي شخص الآن</p>
+            <button class="dardasha-start-btn" onclick="toggleUserSearchModal()">
+                <i class="fas fa-plus"></i> ابدأ محادثة جديدة
+            </button>
+        </div>`;
     }
     return '';
 }
@@ -1669,6 +1679,13 @@ window.closeChatWindow = (prefix) => {
 };
 
 window.handleChatInputFocus = (input) => {
+    // Add focused class to parent input area for visual enhancement
+    const inputArea = input.closest('.chat-input-area');
+    if (inputArea) {
+        inputArea.classList.add('focused');
+        input.addEventListener('blur', () => inputArea.classList.remove('focused'), { once: true });
+    }
+
     if (window.innerWidth > 768) return;
     
     setTimeout(() => {
@@ -2107,23 +2124,24 @@ window.toggleIncognito = (prefix) => {
     else saAlert("تم إيقاف الوضع المخفي", "info");
 };
 
-function saveChatToLocal() {
+async function saveChatToFirebase() {
     if(isIncognito || currentChatMessages.length === 0) return;
-    const storageKey = `sa_chat_history_${currentUser}`;
-    let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
-    const existingIndex = history.findIndex(c => c.id === currentChatId);
     const firstUserMsg = currentChatMessages.find(m => m.role === 'user');
     const title = firstUserMsg ? (firstUserMsg.content.substring(0, 30) + '...') : 'محادثة جديدة';
-    const chatObj = { id: currentChatId, title: title, timestamp: Date.now(), messages: currentChatMessages };
-    
-    if(existingIndex > -1) { 
-        history[existingIndex] = chatObj; 
-    } else { 
-        history.unshift(chatObj); 
+    const chatObj = { id: currentChatId, title, timestamp: Date.now(), messages: currentChatMessages };
+    try {
+        await set(ref(db, `ai_chats/${currentUser}/${currentChatId}`), chatObj);
+    } catch(e) {
+        // Fallback to localStorage
+        const storageKey = `sa_chat_history_${currentUser}`;
+        let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        const existingIndex = history.findIndex(c => c.id === currentChatId);
+        if(existingIndex > -1) { history[existingIndex] = chatObj; } else { history.unshift(chatObj); }
+        localStorage.setItem(storageKey, JSON.stringify(history));
     }
-    
-    localStorage.setItem(storageKey, JSON.stringify(history));
 }
+// Keep saveChatToLocal as alias for compatibility
+function saveChatToLocal() { saveChatToFirebase(); }
 
 window.toggleHistory = (show) => {
     playSound('click');
@@ -2138,16 +2156,59 @@ window.toggleHistory = (show) => {
 
 function renderHistoryList() {
     const list = document.getElementById('ai-history-list');
-    const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
-    list.innerHTML = '';
-    if(history.length === 0) { list.innerHTML = '<p style="color:#666; text-align:center; margin-top:20px;">لا يوجد سجل محادثات</p>'; return; }
-    history.forEach(chat => {
-        const item = document.createElement('div');
-        item.className = 'history-item';
-        item.innerHTML = `<div onclick="loadLocalChat('${chat.id}')"><div class="history-title">${chat.title}</div><span class="history-date">${new Date(chat.timestamp).toLocaleDateString()}</span></div><i class="fas fa-trash" style="color:#666; font-size:0.8rem; padding:5px;" onclick="deleteLocalChat('${chat.id}')"></i>`;
-        list.appendChild(item);
+    list.innerHTML = '<div style="text-align:center;color:#666;"><i class="fas fa-circle-notch fa-spin"></i></div>';
+    
+    get(ref(db, `ai_chats/${currentUser}`)).then(snap => {
+        list.innerHTML = '';
+        let history = [];
+        if(snap.exists()) {
+            const data = snap.val();
+            history = Object.values(data).sort((a, b) => b.timestamp - a.timestamp);
+        } else {
+            // Fallback from localStorage
+            history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
+        }
+        if(history.length === 0) { list.innerHTML = '<p style="color:#666; text-align:center; margin-top:20px;">لا يوجد سجل محادثات</p>'; return; }
+        history.forEach(chat => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `<div onclick="loadFirebaseChat('${chat.id}')"><div class="history-title">${chat.title}</div><span class="history-date">${new Date(chat.timestamp).toLocaleDateString('ar-EG')}</span></div><i class="fas fa-trash" style="color:#666; font-size:0.8rem; padding:5px;" onclick="deleteFirebaseChat('${chat.id}')"></i>`;
+            list.appendChild(item);
+        });
+    }).catch(() => {
+        const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
+        list.innerHTML = '';
+        if(history.length === 0) { list.innerHTML = '<p style="color:#666; text-align:center; margin-top:20px;">لا يوجد سجل محادثات</p>'; return; }
+        history.forEach(chat => {
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerHTML = `<div onclick="loadLocalChat('${chat.id}')"><div class="history-title">${chat.title}</div><span class="history-date">${new Date(chat.timestamp).toLocaleDateString('ar-EG')}</span></div><i class="fas fa-trash" style="color:#666; font-size:0.8rem; padding:5px;" onclick="deleteLocalChat('${chat.id}')"></i>`;
+            list.appendChild(item);
+        });
     });
 }
+
+window.loadFirebaseChat = async (id) => {
+    const snap = await get(ref(db, `ai_chats/${currentUser}/${id}`)).catch(() => null);
+    if(snap && snap.exists()) {
+        const chat = snap.val();
+        currentChatId = chat.id; currentChatMessages = chat.messages || []; isIncognito = false;
+        const prefix = selectedRole === 'teacher' ? 't' : 's';
+        document.getElementById(`${prefix}-ai-msgs`).innerHTML = '';
+        currentChatMessages.forEach(msg => { renderMessageUI(prefix, msg.role, msg.content, msg.image); });
+        toggleHistory(false);
+        window.toggleAiSendMic(prefix, document.getElementById(`${prefix}-ai-input`)?.value || '');
+    }
+};
+
+window.deleteFirebaseChat = (id) => {
+    event.stopPropagation();
+    saConfirm("حذف هذه المحادثة من السجل؟", async () => {
+        await remove(ref(db, `ai_chats/${currentUser}/${id}`)).catch(() => {});
+        renderHistoryList();
+        if(currentChatId === id) startNewChat(selectedRole === 'teacher' ? 't' : 's');
+    });
+};
 
 window.loadLocalChat = (id) => {
     const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
@@ -2178,9 +2239,10 @@ window.shareCurrentChat = async () => {
     playSound('click');
     if(currentChatMessages.length === 0) return saAlert("لا يمكن مشاركة محادثة فارغة", "info");
     saAlert("جاري إنشاء رابط للمشاركة...", "info");
-    const shareRef = push(ref(db, 'shared_chats'));
-    await set(shareRef, { author: currentUser, timestamp: Date.now(), messages: currentChatMessages });
-    const shareLink = `${window.location.href.split('?')[0]}?shareId=${shareRef.key}`;
+    // Save chat to firebase for sharing
+    const shareRef = ref(db, `shared_chats/${currentChatId}`);
+    await set(shareRef, { author: currentUser, authorUid: myUid, timestamp: Date.now(), messages: currentChatMessages, chatId: currentChatId });
+    const shareLink = `${window.location.href.split('?')[0]}?shareId=${currentChatId}`;
     navigator.clipboard.writeText(shareLink).then(() => { saAlert("تم نسخ رابط المحادثة! أرسله لمن تريد.", "success"); });
 };
 
@@ -2190,8 +2252,16 @@ window.loadSharedChat = async (shareId, prefix) => {
     const snap = await get(ref(db, `shared_chats/${shareId}`));
     if(snap.exists()) {
         const data = snap.val();
-        currentChatMessages = data.messages || []; currentChatId = generateChatId(); isIncognito = false; saveChatToLocal();
-        msgs.innerHTML = `<div style="text-align:center; background:#222; padding:5px; margin-bottom:10px; font-size:0.8rem; border-radius:10px; color:#aaa;">تم استرجاع محادثة مشاركة من ${data.author || 'مجهول'}</div>`;
+        currentChatMessages = data.messages || [];
+        // Same user: restore same chatId; different user: new chatId
+        if(data.author === currentUser) {
+            currentChatId = data.chatId || shareId;
+        } else {
+            currentChatId = generateChatId();
+        }
+        isIncognito = false;
+        saveChatToFirebase();
+        msgs.innerHTML = `<div style="text-align:center; background:#222; padding:5px; margin-bottom:10px; font-size:0.8rem; border-radius:10px; color:#aaa;">📨 محادثة مشاركة من ${data.author || 'مجهول'} — يمكنك الاستمرار في المحادثة</div>`;
         currentChatMessages.forEach(msg => { renderMessageUI(prefix, msg.role, msg.content, msg.image); });
         window.history.replaceState({}, document.title, window.location.pathname);
     } else { saAlert("رابط المشاركة غير صالح أو منتهي", "error"); startNewChat(prefix); }
@@ -2211,16 +2281,40 @@ function formatAiResponseText(text) {
     return makeLinksClickable(safeText);
 }
 
-function renderMessageUI(prefix, role, text, imgB64) {
+function renderMessageUI(prefix, role, text, imgB64, useTypewriter = false) {
     const msgs = document.getElementById(`${prefix}-ai-msgs`);
     const wrap = document.createElement('div');
     wrap.className = `chat-msg-wrap ${role}`;
+
+    if (role === 'ai') {
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'ai-msg-avatar';
+        avatarDiv.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i>';
+        wrap.appendChild(avatarDiv);
+    }
 
     const div = document.createElement('div');
     div.className = `chat-msg ${role}`;
 
     if (role === 'ai') {
-        div.innerHTML = formatAiResponseText(text);
+        if (useTypewriter && text) {
+            const formattedText = formatAiResponseText(text);
+            div.innerHTML = '';
+            // Typewriter: reveal HTML character by character safely
+            let i = 0;
+            const chars = text.split('');
+            const typeNext = () => {
+                if (i < chars.length) {
+                    i++;
+                    div.innerHTML = formatAiResponseText(text.substring(0, i));
+                    msgs.scrollTop = msgs.scrollHeight;
+                    setTimeout(typeNext, 8);
+                }
+            };
+            typeNext();
+        } else {
+            div.innerHTML = formatAiResponseText(text);
+        }
     } else {
         div.innerHTML = makeLinksClickable(text);
     }
@@ -2312,6 +2406,9 @@ window.setQType = (type, label) => {
     const mcqSection = document.getElementById('mcq-section-wrapper');
     if (type === 'essay') {
         mcqSection.classList.add('hidden');
+        // Essay defaults to 2 points
+        const ptsInput = document.getElementById('q-points');
+        if(ptsInput && ptsInput.value === '1') ptsInput.value = '2';
     } else {
         mcqSection.classList.remove('hidden');
         if(document.getElementById('mcq-options-container').children.length === 0) renderOptionFields();
@@ -2440,6 +2537,7 @@ window.resetCreateForm = () => {
     document.getElementById('new-test-name').value = ''; document.getElementById('new-test-grade').value = ''; document.getElementById('new-test-duration').value = '';
     const subj = document.getElementById('new-test-subject'); if(subj) subj.value = '';
     document.getElementById('custom-grade-input').classList.add('hidden');
+    const customSubjInput = document.getElementById('custom-subject-input'); if(customSubjInput) { customSubjInput.value = ''; customSubjInput.classList.add('hidden'); }
     document.getElementById('create-page-title').innerText = "اختبار جديد";
     document.getElementById('btn-save-test').innerHTML = '<i class="fas fa-save"></i> نشر الاختبار النهائي';
     currentQuestions = []; renderAddedQuestions(); clearQuestionForm(); isEditingMode = false; editingTestId = null;
@@ -2468,7 +2566,8 @@ window.saveTest = async () => {
     const title = document.getElementById('new-test-name').value;
     let grade = document.getElementById('new-test-grade').value; if(grade === 'custom') grade = document.getElementById('custom-grade-input').value;
     const duration = document.getElementById('new-test-duration').value;
-    const subject = document.getElementById('new-test-subject').value;
+    let subject = document.getElementById('new-test-subject').value;
+    if(subject === 'custom_subject') subject = document.getElementById('custom-subject-input').value.trim();
     if(!title || !grade || !duration || !subject || currentQuestions.length === 0) {
         if (!subject) {
             const el = document.getElementById('new-test-subject');
@@ -2485,6 +2584,7 @@ window.saveTest = async () => {
 };
 
 window.checkCustomGrade = (el) => { document.getElementById('custom-grade-input').classList.toggle('hidden', el.value !== 'custom'); };
+window.checkCustomSubject = (el) => { document.getElementById('custom-subject-input').classList.toggle('hidden', el.value !== 'custom_subject'); };
 window.toggleTestVisibility = (k, s) => { playSound('click'); update(ref(db, `tests/${k}`), { isHidden: s }); saAlert(s ? "تم إخفاء الاختبار عن الطلاب" : "الاختبار الآن مرئي للطلاب", "info"); };
 window.deleteTest = (k) => { saConfirm("هل أنت متأكد من حذف هذا الاختبار؟", () => { remove(ref(db, `tests/${k}`)); remove(ref(db, `results/${k}`)); saAlert("تم الحذف بنجاح", "success"); }); };
 
@@ -2695,7 +2795,8 @@ window.submitExam = async () => {
         total += pts;
         let isCorrect = false;
         if (q.type === 'essay') {
-            if (answers[i] && answers[i].trim().length > 2) { isCorrect = true; score += pts; }
+            // Don't add essay points here - AI will grade later
+            isCorrect = false;
         } else {
             isCorrect = answers[i] === q.correct;
             if (isCorrect) score += pts;
@@ -2711,15 +2812,21 @@ window.submitExam = async () => {
         try {
             const essayPromises = questions.map(async (q, i) => {
                 if (q.type !== 'essay' || !answers[i] || answers[i].trim().length < 3) return;
-                const aiPrompt = `سؤال مقالي: "${q.text}"\nإجابة الطالب: "${answers[i]}"\nالإجابة النموذجية: "${q.correct || 'غير محددة'}"\n\nهل الإجابة صحيحة؟ أجب فقط: صح أو خطأ, ثم درجة من 10.`;
+                const pts = parseInt(q.points) || 2;
+                const aiPrompt = `أنت مصحح اختبار. سؤال مقالي: "${q.text}"\nإجابة الطالب: "${answers[i]}"\nالإجابة النموذجية: "${q.correct || 'غير محددة'}"\n\nقيّم الإجابة من 2 فقط (0 = خطأ كامل، 1 = نصف صح، 2 = صح كامل). أجب برقم فقط: 0 أو 1 أو 2`;
                 try {
                     const result = await callPollinationsAI([{role:'user', content: aiPrompt}]);
-                    const isOk = result.includes('صح') || result.includes('صحيح') || result.includes('correct');
-                    details[i].isCorrect = isOk;
-                    details[i].aiGrading = result.substring(0, 100);
-                    if (!isOk && details[i].isCorrect) { score = Math.max(0, score - (parseInt(q.points)||1)); }
-                    if (isOk && !details[i].isCorrect) { score += (parseInt(q.points)||1); }
-                } catch(e) {}
+                    const match = result.match(/[012]/);
+                    const earnedPts = match ? parseInt(match[0]) : (result.includes('صح') || result.includes('correct') ? 2 : 0);
+                    const scaledPts = Math.round((earnedPts / 2) * pts);
+                    score += scaledPts;
+                    details[i].isCorrect = earnedPts >= 1;
+                    details[i].aiGrading = `${earnedPts}/2 — ${result.substring(0, 80)}`;
+                    details[i].earnedPts = scaledPts;
+                } catch(e) {
+                    // On error, give full points if answered
+                    if(answers[i] && answers[i].trim().length > 2) score += pts;
+                }
             });
             await Promise.all(essayPromises);
             pct = total === 0 ? 0 : Math.round((score/total)*100);
@@ -2964,20 +3071,35 @@ window.sendAiMsg = async (prefix) => {
     renderMessageUI(prefix, 'user', txt, imgB64);
     input.value = '';
     window.toggleAiSendMic(prefix, '');
-    saveChatToLocal();
+    saveChatToFirebase();
 
+    // Thinking avatar loader
     const loadId = 'loading-' + Date.now();
     const loaderDiv = document.createElement('div');
     loaderDiv.className = 'chat-msg-wrap ai';
     loaderDiv.id = loadId;
-    loaderDiv.innerHTML = '<div class="chat-msg ai"><span class="ai-typing-dot"></span><span class="ai-typing-dot"></span><span class="ai-typing-dot"></span></div>';
+    loaderDiv.innerHTML = `
+        <div class="ai-thinking-wrap">
+            <div class="ai-thinking-orb">
+                <div class="ai-orb-ring"></div>
+                <div class="ai-orb-ring ai-orb-ring2"></div>
+                <div class="ai-orb-ring ai-orb-ring3"></div>
+                <i class="fas fa-wand-magic-sparkles ai-orb-icon"></i>
+            </div>
+            <div class="ai-thinking-dots"><span></span><span></span><span></span></div>
+        </div>`;
     msgs.appendChild(loaderDiv);
     msgs.scrollTop = msgs.scrollHeight;
 
     try {
+        const userFirstName = currentUser ? currentUser.split(' ')[0] : '';
+        const userIcon = localStorage.getItem('sa_icon') || '';
+        const userUid = myUid || '';
+        const roleAr = selectedRole === 'teacher' ? 'معلم' : 'طالب';
+
         const sysContent = selectedRole === 'student'
-            ? 'أنت SA AI مساعد دراسي ذكي. أجب بالعربية. اجعل إجابتك متناسبة مع السؤال: قصيرة للأسئلة البسيطة، مفصلة للمعقدة. استخدم **نص** للتمييز و- للقوائم.'
-            : 'أنت SA AI مساعد معلمين ذكي. أجب بالعربية. ساعد في إنشاء الاختبارات وتحضير الدروس وتحليل الطلاب. اجعل إجابتك متناسبة مع السؤال.';
+            ? `أنت SA AI، مساعد دراسي ذكي تم تصميمه وتطويره بواسطة سيف هاني. أجب بالعربية دائماً. اجعل إجابتك متناسبة مع السؤال: قصيرة للأسئلة البسيطة، مفصلة للمعقدة. استخدم **نص** للتمييز و- للقوائم. منصة SA EDU هي منصة تعليمية متكاملة تضم: مكتبة الاختبارات، دردشة مباشرة، Reese (مجتمع أفكار)، وذكاء اصطناعي. صممها سيف هاني. المستخدم الحالي اسمه "${currentUser}"، ${roleAr}، معرفه ${userUid}.`
+            : `أنت SA AI، مساعد معلمين ذكي تم تصميمه وتطويره بواسطة سيف هاني. أجب بالعربية دائماً. ساعد في إنشاء الاختبارات وتحضير الدروس وتحليل الطلاب. منصة SA EDU تضم: مكتبة الاختبارات، إنشاء اختبارات، نتائج الطلاب، دردشة مباشرة، Reese، وذكاء اصطناعي. صممها سيف هاني. المعلم الحالي اسمه "${currentUser}"، معرفه ${userUid}.`;
 
         const messages = [
             { role: 'system', content: sysContent },
@@ -2990,8 +3112,8 @@ window.sendAiMsg = async (prefix) => {
         const loaderEl = document.getElementById(loadId);
         if (loaderEl) loaderEl.remove();
         currentChatMessages.push({ role: 'ai', content: reply, image: null });
-        renderMessageUI(prefix, 'ai', reply, null);
-        saveChatToLocal();
+        renderMessageUI(prefix, 'ai', reply, null, true);
+        saveChatToFirebase();
     } catch (e) {
         const loaderEl = document.getElementById(loadId);
         if (loaderEl) loaderEl.innerHTML = '<div class="chat-msg ai" style="color:#ef4444;">⚠️ خطأ في الاتصال. تحقق من الإنترنت وحاول مرة أخرى.</div>';
