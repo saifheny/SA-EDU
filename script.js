@@ -1415,7 +1415,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
                 </button>
             </div>
         </div>
-        <div class="chat-msgs-area" id="chat-msgs-${chatId}"></div>
+        <div class="chat-msgs-area chat-bg-${chatId.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%10}" id="chat-msgs-${chatId}"></div>
         <div class="chat-input-area" id="chat-input-area-${chatId}">
             <label class="chat-img-attach-btn" title="إرسال صور">
                 <i class="ph-bold ph-camera"></i>
@@ -3602,6 +3602,8 @@ window.handleDeepLinks = async function() {
             avatar.style.color = color; avatar.style.borderColor = color;
             document.getElementById('pdl-name').innerText = foundUser.name;
             document.getElementById('pdl-role').innerText = foundRole === 'teacher' ? 'معلم' : 'طالب';
+            const questionEl = document.getElementById('pdl-question');
+            if (questionEl) questionEl.innerText = `هل تريد التحدث مع ${foundUser.name}؟`;
             document.getElementById('pdl-chat-btn').onclick = () => {
                 modal.classList.add('hidden');
                 const prefix = selectedRole === 'teacher' ? 't' : 's';
