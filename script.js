@@ -1042,7 +1042,7 @@ window.searchUserById = async (forcedId = null) => {
             }
         }
     } catch(e) {
-        if(!forcedId) resultDiv.innerHTML = '<p style="color:var(--danger); text-align:center;">خطأ في البحث</p>';
+        if(!forcedId) resultDiv.innerHTML = `<div class="search-result-empty error"><i class="fas fa-wifi-slash"></i><span>خطأ في الاتصال</span></div>`;
         return;
     }
     
@@ -1053,18 +1053,26 @@ window.searchUserById = async (forcedId = null) => {
              return;
         }
 
-        const roleColor = foundRole === 'teacher' ? 'var(--accent-gold)' : 'var(--accent-primary)';
+        const roleLabel = foundRole === 'teacher' ? 'معلم' : 'طالب';
+        const roleColor = foundRole === 'teacher' ? '#d4af37' : '#3b82f6';
+        const roleIcon = foundRole === 'teacher' ? 'fa-chalkboard-user' : 'fa-user-graduate';
         resultDiv.innerHTML = `
-            <div style="background:#222; padding:15px; border-radius:15px; text-align:center; margin-top:15px;">
-                <div class="avatar-frame mini-frame" style="margin:0 auto 10px; color:${roleColor}; border-color:${roleColor};">
-                    <i class="fas ${foundUser.icon}"></i>
+            <div class="search-result-card">
+                <div class="src-avatar" style="border-color:${roleColor}22; color:${roleColor};">
+                    <i class="fas ${foundUser.icon || 'fa-user'}"></i>
                 </div>
-                <h4 style="margin:0 0 10px;">${foundUser.name}</h4>
-                <button class="modern-btn" onclick="startChatWithUser('${foundUser.name}', '${foundUser.icon}', '${foundUser.uid}')">بدء المحادثة</button>
+                <div class="src-info">
+                    <div class="src-name">${foundUser.name}</div>
+                    <div class="src-role" style="color:${roleColor};"><i class="fas ${roleIcon}"></i> ${roleLabel}</div>
+                    <div class="src-uid">ID: ${foundUser.uid}</div>
+                </div>
+                <button class="src-chat-btn" onclick="startChatWithUser('${foundUser.name}', '${foundUser.icon}', '${foundUser.uid}')">
+                    <i class="fas fa-message"></i>
+                </button>
             </div>
         `;
     } else {
-        if(!forcedId) resultDiv.innerHTML = '<p style="color:var(--danger); text-align:center;">المستخدم غير موجود</p>';
+        if(!forcedId) resultDiv.innerHTML = `<div class="search-result-empty"><i class="fas fa-user-slash"></i><span>المستخدم غير موجود</span></div>`;
     }
 };
 
@@ -2308,17 +2316,60 @@ window.loadSharedChat = async (shareId, prefix) => {
 };
 
 function formatAiResponseText(text) {
-    if(!text) return '';
-    let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    safeText = safeText.replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>');
-    safeText = safeText.replace(/`(.*?)`/g, '<code>$1</code>');
-    safeText = safeText.replace(/^\s*-\s+(.*)$/gm, '<li>$1</li>');
-    if(safeText.includes('<li>')) {
-        safeText = safeText.replace(/((<li>.*<\/li>\s*)+)/g, '<ul>$1</ul>');
-    }
-    safeText = safeText.replace(/\n/g, '<br>');
-    return makeLinksClickable(safeText);
+    if (!text) return '';
+    // Escape HTML
+    let t = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    // Code blocks first (preserve newlines inside them)
+    const codeBlocks = [];
+    t = t.replace(/```[\s\S]*?```/g, m => {
+        const inner = m.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '');
+        codeBlocks.push(`<div class="ai-code-block"><button class="ai-copy-code-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText);this.innerHTML='<i class=\\'fas fa-check\\'></i>';setTimeout(()=>this.innerHTML='<i class=\\'fas fa-copy\\'></i>',1500)"><i class="fas fa-copy"></i></button><pre><code>${inner.replace(/\n/g,'<br>')}</code></pre></div>`);
+        return `%%CODE_${codeBlocks.length - 1}%%`;
+    });
+
+    // Inline code
+    t = t.replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>');
+
+    // Bold & italic
+    t = t.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
+
+    // Headings (#, ##, ###)
+    t = t.replace(/^###\s+(.+)$/gm, '<div class="ai-h3">$1</div>');
+    t = t.replace(/^##\s+(.+)$/gm, '<div class="ai-h2">$1</div>');
+    t = t.replace(/^#\s+(.+)$/gm, '<div class="ai-h1">$1</div>');
+
+    // Numbered lists
+    t = t.replace(/^\d+\.\s+(.+)$/gm, '<li class="ai-li-num">$1</li>');
+
+    // Bullet lists
+    t = t.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li class="ai-li-bul">$1</li>');
+
+    // Wrap consecutive li items
+    t = t.replace(/(<li class="ai-li-num">[\s\S]*?<\/li>)(\n?(?=<li class="ai-li-num">)|(?!<li))/g, (m, li) => li);
+    t = t.replace(/(<li class="ai-li-bul">.*?<\/li>\n?)+/g, m => `<ul class="ai-ul">${m}</ul>`);
+    t = t.replace(/(<li class="ai-li-num">.*?<\/li>\n?)+/g, m => `<ol class="ai-ol">${m}</ol>`);
+
+    // Paragraphs: split by double newline
+    const paragraphs = t.split(/\n{2,}/);
+    t = paragraphs.map(p => {
+        p = p.trim();
+        if (!p) return '';
+        // Don't wrap block elements
+        if (p.startsWith('<div') || p.startsWith('<ul') || p.startsWith('<ol') || p.startsWith('<pre') || p.startsWith('%%CODE_')) {
+            return p.replace(/\n/g, ' ');
+        }
+        // Single newlines become spaces (keeps text flowing naturally on mobile)
+        p = p.replace(/\n/g, ' ');
+        return `<p class="ai-p">${p}</p>`;
+    }).filter(Boolean).join('');
+
+    // Restore code blocks
+    codeBlocks.forEach((cb, i) => { t = t.replace(`%%CODE_${i}%%`, cb); });
+
+    return makeLinksClickable(t);
 }
 
 function renderMessageUI(prefix, role, text, imgB64, useTypewriter = false) {
