@@ -137,7 +137,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             </div>
         </nav>
         <div class="portal-container">
-            <section id="t-library" class="app-section hidden">
+            <section id="t-library" class="app-section">
                 <div class="mobile-spacer"></div>
                 <div class="create-exam-cta" onclick="switchTab('t-create')">
                     <i class="fas fa-file-signature cta-bg-icon"></i>
@@ -159,7 +159,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="t-tests-list"></div>
             </section>
 
-            <section id="t-reese" class="app-section hidden full-width-section">
+            <section id="t-reese" class="app-section full-width-section">
                 <div class="mobile-spacer"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 15px;">
                     <h2 style="margin:0; font-family:'Outfit', sans-serif;">Reese SA</h2>
@@ -177,7 +177,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="reese-feed-container-t" class="feed-container"></div>
             </section>
 
-            <section id="t-dardasha" class="app-section hidden" style="padding: 0; max-width: 100%;">
+            <section id="t-dardasha" class="app-section" style="padding: 0; max-width: 100%;">
                 <div class="chat-layout">
                     <div class="chat-sidebar" id="t-chat-sidebar">
                         <div class="chat-sidebar-header">
@@ -203,7 +203,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="t-results" class="app-section hidden">
+            <section id="t-results" class="app-section">
                 <div class="mobile-spacer"></div>
                 <div class="back-btn-header" onclick="switchTab('t-library')"><i class="fas fa-arrow-right"></i> الرئيسية</div>
                 <h2>نتائج الطلاب</h2>
@@ -211,7 +211,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="t-results-container"></div>
             </section>
 
-            <section id="t-create" class="app-section hidden">
+            <section id="t-create" class="app-section">
                 <div class="mobile-spacer"></div>
                 <div class="back-btn-header" onclick="resetCreateForm(); switchTab('t-library');"><i class="fas fa-arrow-right"></i> إلغاء</div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -299,7 +299,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </button>
             </section>
 
-            <section id="t-ai" class="app-section hidden">
+            <section id="t-ai" class="app-section">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
                         <div style="display:flex; gap:10px;">
@@ -331,7 +331,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="t-editor" class="app-section hidden smart-editor-section">
+            <section id="t-editor" class="app-section smart-editor-section">
                 <div class="mobile-spacer"></div>
                 <div class="editor-toolbar">
                     <div class="editor-tool-group">
@@ -373,7 +373,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             </div>
         </nav>
         <div class="portal-container">
-            <section id="s-exams" class="app-section hidden">
+            <section id="s-exams" class="app-section">
                 <div class="mobile-spacer"></div>
                 <div id="xp-hud" class="xp-hud">
                     <div class="xp-hud-top">
@@ -419,7 +419,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="s-exams-list"></div>
             </section>
 
-            <section id="s-analytics" class="app-section hidden">
+            <section id="s-analytics" class="app-section">
                 <div class="mobile-spacer"></div>
                 <div class="back-btn-header" onclick="switchTab('s-exams')"><i class="fas fa-arrow-right"></i> رجوع</div>
                 <h2 style="margin-bottom: 20px;">تحليل المستوى الدراسي</h2>
@@ -430,7 +430,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="s-reese" class="app-section hidden full-width-section">
+            <section id="s-reese" class="app-section full-width-section">
                 <div class="mobile-spacer"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 15px;">
                     <h2 style="margin:0; font-family:'Outfit', sans-serif;">Reese SA</h2>
@@ -448,7 +448,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="reese-feed-container-s" class="feed-container"></div>
             </section>
 
-            <section id="s-dardasha" class="app-section hidden" style="padding: 0; max-width: 100%;">
+            <section id="s-dardasha" class="app-section" style="padding: 0; max-width: 100%;">
                 <div class="chat-layout">
                     <div class="chat-sidebar" id="s-chat-sidebar">
                         <div class="chat-sidebar-header">
@@ -473,7 +473,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="s-grades" class="app-section hidden">
+            <section id="s-grades" class="app-section">
                 <div class="mobile-spacer"></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <h2 style="margin:0;">لوحة الشرف (درجاتي)</h2>
@@ -484,7 +484,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="s-grades-list"></div>
             </section>
 
-            <section id="s-ai" class="app-section hidden">
+            <section id="s-ai" class="app-section">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
                         <div style="display:flex; gap:10px;">
@@ -518,7 +518,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
 
             </section>
 
-            <section id="s-editor" class="app-section hidden smart-editor-section">
+            <section id="s-editor" class="app-section smart-editor-section">
                 <div class="mobile-spacer"></div>
                 <div class="editor-toolbar">
                     <div class="editor-tool-group">
@@ -548,7 +548,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <input type="file" id="s-editor-img-input" hidden accept="image/*" onchange="editorHandleImage(this)">
             </section>
 
-            <section id="s-taking-test" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
+            <section id="s-taking-test" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 800px; margin: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <button class="back-btn-header" onclick="closeExam()"><i class="fas fa-sign-out-alt"></i> خروج</button>
@@ -560,7 +560,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="s-exam-result" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3100; padding: 20px; overflow-y: auto;">
+            <section id="s-exam-result" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3100; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 700px; margin: auto; padding-bottom: 60px;">
                     <div class="exam-result-header">
                         <div class="exam-result-avatar"><i class="fas fa-graduation-cap"></i></div>
@@ -579,7 +579,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
             
-            <section id="s-review-test" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
+            <section id="s-review-test" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 800px; margin: auto;">
                     <div class="back-btn-header" onclick="document.getElementById('s-review-test').classList.add('hidden')"><i class="fas fa-arrow-right"></i> إغلاق المراجعة</div>
                     <h2 style="color: var(--accent-primary);">مراجعة الإجابات</h2>
