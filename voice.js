@@ -43,6 +43,20 @@ export function initVoiceModule(db, currentUser, myUid) {
     if (urlRoom) {
         voiceActiveRoom = urlRoom;
         setTimeout(() => { openVoiceRooms(); showVoiceGate(); }, 600);
+    } else {
+        // Check if user was in a room before
+        const lastRoom = localStorage.getItem('sa_last_voice_room');
+        if (lastRoom) {
+            // Show rejoin notification after a delay
+            setTimeout(async () => {
+                const snap = await get(ref(_voiceDb, `voice_rooms/${lastRoom}/users`)).catch(() => null);
+                if (snap && snap.exists() && Object.keys(snap.val()).length > 0) {
+                    if (window.showInAppNotif) showInAppNotif('غرفة صوتية', 'الغرفة السابقة لا تزال مفتوحة — انضم مجدداً؟', () => { voiceJoinRoom(lastRoom); openVoiceRooms(); });
+                } else {
+                    localStorage.removeItem('sa_last_voice_room');
+                }
+            }, 2000);
+        }
     }
 }
 
@@ -102,6 +116,7 @@ window.voiceCreateRoom = async () => {
 
 window.voiceJoinRoom = (roomId) => {
     voiceActiveRoom = roomId;
+    localStorage.setItem('sa_last_voice_room', roomId);
     showVoiceGate();
 };
 
@@ -331,6 +346,7 @@ window.voiceExitRoom = () => {
     Object.values(voiceCalls).forEach(c => { try { c.close(); } catch(e){} });
     voiceCalls = {}; voiceMyPeerId = null; voiceActiveRoom = null; voiceIsMuted = false;
     voiceRoomOwnerId = null; voiceKnownPeers.clear();
+    localStorage.removeItem('sa_last_voice_room');
 
     const audioContainer = document.getElementById('voice-audio-container');
     if (audioContainer) audioContainer.innerHTML = '';
