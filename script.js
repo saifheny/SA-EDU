@@ -29,8 +29,8 @@ let reeseImages = [];
 let myUid = null;
 let activeChatRoomId = null;
 
-const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai'];
-const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai'];
+const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai', 't-editor'];
+const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai', 's-editor'];
 let _suppressHistoryPush = false;
 
 let _swipeStartX = 0;
@@ -1263,13 +1263,7 @@ async function getMicStream() {
 window.getMicStream = getMicStream;
 
 function triggerAIAnalysisBadge() {
-    const el = document.getElementById('student-type-text');
-    if (!el) return;
-    const badge = document.createElement('span');
-    badge.className = 'ai-badge-pulse';
-    badge.innerHTML = ' <i class="fas fa-robot"></i>';
-    badge.title = 'تحليل ذكي بواسطة AI';
-    el.parentElement?.appendChild(badge);
+    // Robot icon removed as requested
 }
 
 function checkOnboarding() {
@@ -1491,11 +1485,12 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
         const imgHtml = imgs.map(src => `<img src="${src}" onclick="openImageViewer(this.src)" style="width:100%;height:100%;object-fit:cover;cursor:pointer;">`).join('');
         content = `<div class="wapp-msg"><div class="wapp-img-grid grid-${grid}">${imgHtml}</div>${buildMsgFooter(msg, isMe)}</div>`;
     } else if (msg.type === 'voice') {
+        const durLabel = msg.duration || '0:00';
         content = `<div class="wapp-msg">
             <div class="wapp-voice-player">
                 <button class="voice-play-btn" onclick="toggleVoicePlay(this,'${msg._key}')"><i class="ph-bold ph-play"></i></button>
                 <div class="voice-waveform">${generateWaveform()}</div>
-                <span class="voice-duration">${msg.duration || '0:00'}</span>
+                <span class="voice-duration" id="vdur-${msg._key}">${durLabel}</span>
             </div>
             ${buildMsgFooter(msg, isMe)}
         </div>`;
@@ -1506,8 +1501,36 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
             if (playerEl && !playerEl.querySelector('audio')) {
                 const aud = document.createElement('audio');
                 aud.id = `audio-${audioKey}`;
-                aud.preload = 'none';
-                aud.onended = () => resetVoiceBtn(audioKey);
+                aud.preload = 'metadata';
+                aud.onloadedmetadata = () => {
+                    const dur = aud.duration;
+                    if (dur && isFinite(dur)) {
+                        const m = Math.floor(dur / 60);
+                        const s = Math.floor(dur % 60);
+                        const durEl = document.getElementById(`vdur-${audioKey}`);
+                        if (durEl && durEl.innerText === '0:00') durEl.innerText = `${m}:${s < 10 ? '0'+s : s}`;
+                    }
+                };
+                aud.ontimeupdate = () => {
+                    const dur = aud.duration;
+                    const cur = aud.currentTime;
+                    const durEl = document.getElementById(`vdur-${audioKey}`);
+                    if (durEl && dur && isFinite(dur)) {
+                        const rem = dur - cur;
+                        const m = Math.floor(rem / 60);
+                        const s = Math.floor(rem % 60);
+                        durEl.innerText = `${m}:${s < 10 ? '0'+s : s}`;
+                    }
+                };
+                aud.onended = () => {
+                    resetVoiceBtn(audioKey);
+                    const durEl = document.getElementById(`vdur-${audioKey}`);
+                    if (durEl && aud.duration && isFinite(aud.duration)) {
+                        const m = Math.floor(aud.duration / 60);
+                        const s = Math.floor(aud.duration % 60);
+                        durEl.innerText = `${m}:${s < 10 ? '0'+s : s}`;
+                    }
+                };
                 aud.src = audioStore;
                 playerEl.appendChild(aud);
             }
@@ -1775,7 +1798,7 @@ async function loadReeseAiSuggestionsAuto() {
         ? ['تحفيز الطلاب', 'نصيحة تعليمية', 'فكرة درس مبتكرة', 'سؤال تفاعلي للطلاب']
         : ['تحفيز ذاتي', 'نصيحة مذاكرة', 'إنجاز شخصي', 'سؤال للمجتمع'];
 
-    const prompt = `أنت مساعد منصة SA EDU التعليمية. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح يجب أن يكون في فئة مختلفة: ${categories.join(', ')}. المنشورات تكون طبيعية وواقعية ومميزة وغير رسمية. ${prevStr}. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف. لا تكتب أي شيء آخر.`;
+    const prompt = `أنت مساعد منصة SA EDU التعليمية المتحمس. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح في فئة مختلفة: ${categories.join(', ')}. ${prevStr}. القواعد المهمة: لا تعتذر أبداً، لا تقل "آسف" أو "لا أستطيع"، دائماً أعط 4 اقتراحات بدون مقدمات. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف.`;
 
     try {
         let text = await callPollinationsAI(prompt);
@@ -1803,7 +1826,17 @@ async function loadReeseAiSuggestionsAuto() {
             container.appendChild(chip);
         });
     } catch(e) {
-        container.innerHTML = '<div class="suggestion-chip" style="opacity:0.5; pointer-events:none;"><i class="fas fa-wifi-slash"></i> تعذر تحميل الاقتراحات</div>';
+        const defaults = selectedRole === 'teacher'
+            ? ['مَن لا يتعلم في صغره لا يتقدم في كبره — شجّعوا طلابكم على القراءة اليومية', 'نصيحتي: خصّص 10 دقائق يومياً للمراجعة الصامتة', 'سؤال لطلابي: ما الهدف الذي تسعون إليه هذا العام؟', 'أقوى درس تعلّمته: الصبر على الطالب البطيء هو استثمار في مستقبله']
+            : ['اليوم حفظت 10 معادلات — كل خطوة صغيرة تُراكم النجاح', 'نصيحة: لا تذاكر وأنت متعب، استرح ثم ابدأ من جديد', 'أصعب سؤال في الاختبار صار سهلاً بعد المراجعة مرتين', 'مَن منكم يذاكر مع موسيقى؟ جربوها مع الأناشيد'];
+        container.innerHTML = '';
+        defaults.forEach(sug => {
+            const chip = document.createElement('div');
+            chip.className = 'suggestion-chip';
+            chip.innerText = sug;
+            chip.onclick = () => { document.getElementById('reese-text-input').value = sug; };
+            container.appendChild(chip);
+        });
     }
 }
 
@@ -1876,7 +1909,7 @@ window.loadReesePosts = (prefix) => {
             let imagesHtml = '';
             if(post.images && post.images.length > 0) {
                 const gridClass = post.images.length === 1 ? 'one-img' : 'two-imgs';
-                imagesHtml = `<div class="reese-images-grid ${gridClass}">${post.images.map(img => `<img src="${img}" class="reese-post-img" onclick="openImageViewer(this.src)">`).join('')}</div>`;
+                imagesHtml = `<div class="reese-images-grid ${gridClass}" ondblclick="doubleTapLike('${post.id}', ${post.likes || 0}, this)">${post.images.map(img => `<img src="${img}" class="reese-post-img" onclick="openImageViewer(this.src)">`).join('')}</div>`;
             }
             const div = document.createElement('div');
             div.className = 'reese-card';
@@ -1913,6 +1946,18 @@ window.toggleMyPostsView = () => {
     if(isMyPostsView) { icon.style.color = 'var(--danger)'; } else { icon.style.color = '#aaa'; }
     loadReesePosts(prefix);
     saAlert(isMyPostsView ? "عرض منشوراتك فقط (وضع الإدارة)" : "عرض كل المنشورات", "info");
+};
+
+window.doubleTapLike = async (id, currentLikes, el) => {
+    const likedPosts = JSON.parse(localStorage.getItem(`liked_posts_${currentUser}`) || '[]');
+    if (likedPosts.includes(id)) return;
+    const heart = document.createElement('div');
+    heart.innerHTML = '<i class="fas fa-heart" style="color:#ef4444; font-size:3rem;"></i>';
+    heart.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;animation:heartPop 0.7s ease forwards;z-index:10;';
+    el.style.position = 'relative';
+    el.appendChild(heart);
+    setTimeout(() => heart.remove(), 700);
+    likeReese(id, currentLikes);
 };
 
 window.likeReese = async (id, currentLikes) => {
@@ -2508,8 +2553,13 @@ function loadStudentExams() {
         let foundExam = false;
         const promises = Object.entries(tests).map(async ([key, val]) => {
             if (val.isHidden === true) return null;
-            const resSnap = await get(ref(db, `results/${key}/${currentUser}`));
-            return { key, val, hasTaken: resSnap.exists(), score: resSnap.exists() ? resSnap.val().percentage : null };
+            const resSnap = await get(ref(db, `results/${key}/${currentUser}/latest`)).catch(() => null)
+                || await get(ref(db, `results/${key}/${currentUser}`)).catch(() => null);
+            if (resSnap && resSnap.exists()) {
+                const resVal = resSnap.val();
+                return { key, val, hasTaken: true, score: resVal.percentage != null ? resVal.percentage : null };
+            }
+            return { key, val, hasTaken: false, score: null };
         });
         const results = await Promise.all(promises);
         results.forEach(item => {
@@ -2543,8 +2593,9 @@ window.loadStudentGrades = () => {
         get(ref(db, 'tests')).then(async (testSnap) => {
             list.innerHTML = ''; const tests = testSnap.val() || {}; let foundAny = false;
             for(const [testId, testData] of Object.entries(tests)) {
-                const resSnap = await get(ref(db, `results/${testId}/${currentUser}`));
-                if(resSnap.exists()) {
+            const resSnap = await get(ref(db, `results/${testId}/${currentUser}/latest`)).catch(() => null)
+                || await get(ref(db, `results/${testId}/${currentUser}`)).catch(() => null);
+                if(resSnap && resSnap.exists() && resSnap.val().percentage != null) {
                     foundAny = true; const res = resSnap.val();
                     const color = res.percentage >= 90 ? 'var(--accent-gold)' : (res.percentage >= 50 ? 'var(--success)' : 'var(--danger)');
                     const div = document.createElement('div'); div.className = 'mini-card';
@@ -2622,50 +2673,125 @@ window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفق�
 
 window.submitExam = async () => {
     playSound('success');
-    clearInterval(timerInt); let score = 0, total = 0, details = [];
+    clearInterval(timerInt);
+    let score = 0, total = 0, details = [];
     const questions = activeTest.questions || [];
+    const hasEssay = questions.some(q => q.type === 'essay');
+
     questions.forEach((q, i) => {
-        const pts = parseInt(q.points) || 1; 
-        total += pts; 
-        
+        const pts = parseInt(q.points) || 1;
+        total += pts;
         let isCorrect = false;
         if (q.type === 'essay') {
-            if (answers[i] && answers[i].trim().length > 2) {
-                isCorrect = true; 
-                score += pts;
-            }
+            if (answers[i] && answers[i].trim().length > 2) { isCorrect = true; score += pts; }
         } else {
             isCorrect = answers[i] === q.correct;
-            if(isCorrect) score += pts; 
+            if (isCorrect) score += pts;
         }
-        
-        details.push({ 
-            q: q.text, 
-            image: q.image || null, 
-            user: answers[i]||'-', 
-            correct: q.correct, 
-            isCorrect,
-            type: q.type || 'mcq'
-        });
+        details.push({ q: q.text, image: q.image || null, user: answers[i]||'-', correct: q.correct, isCorrect, type: q.type || 'mcq' });
     });
-    const pct = total === 0 ? 0 : Math.round((score/total)*100);
-    await set(ref(db, `results/${activeTest.id}/${currentUser}`), { score, total, percentage: pct, timestamp: Date.now(), details });
-    saAlert(`تم التسليم! النتيجة التقريبية: ${pct}%`, "success");
-    document.getElementById('s-taking-test').classList.add('hidden'); loadStudentExams(); loadStudentGrades(); 
+
+    let pct = total === 0 ? 0 : Math.round((score/total)*100);
+
+    if (hasEssay) {
+        const overlay = document.getElementById('exam-grading-overlay');
+        overlay.classList.remove('hidden');
+        try {
+            const essayPromises = questions.map(async (q, i) => {
+                if (q.type !== 'essay' || !answers[i] || answers[i].trim().length < 3) return;
+                const aiPrompt = `سؤال مقالي: "${q.text}"\nإجابة الطالب: "${answers[i]}"\nالإجابة النموذجية: "${q.correct || 'غير محددة'}"\n\nهل الإجابة صحيحة؟ أجب فقط: صح أو خطأ, ثم درجة من 10.`;
+                try {
+                    const result = await callPollinationsAI([{role:'user', content: aiPrompt}]);
+                    const isOk = result.includes('صح') || result.includes('صحيح') || result.includes('correct');
+                    details[i].isCorrect = isOk;
+                    details[i].aiGrading = result.substring(0, 100);
+                    if (!isOk && details[i].isCorrect) { score = Math.max(0, score - (parseInt(q.points)||1)); }
+                    if (isOk && !details[i].isCorrect) { score += (parseInt(q.points)||1); }
+                } catch(e) {}
+            });
+            await Promise.all(essayPromises);
+            pct = total === 0 ? 0 : Math.round((score/total)*100);
+        } catch(e) {}
+        overlay.classList.add('hidden');
+    }
+
+    const attemptKey = `attempt_${Date.now()}`;
+    const resultData = { score, total, percentage: pct, timestamp: Date.now(), details };
+    await set(ref(db, `results/${activeTest.id}/${currentUser}/${attemptKey}`), resultData);
+    await set(ref(db, `results/${activeTest.id}/${currentUser}/latest`), resultData);
+
+    document.getElementById('s-taking-test').classList.add('hidden');
+    showExamResultScreen(pct, score, total, details, activeTest.id);
+    loadStudentExams(); loadStudentGrades();
+};
+
+window.showExamResultScreen = (pct, score, total, details, testId) => {
+    playSound('success');
+    const screen = document.getElementById('s-exam-result');
+    document.getElementById('exam-result-pct').innerText = pct + '%';
+    
+    let gradeColor, gradeTitle, suggestion;
+    if (pct >= 90) { gradeColor = 'var(--accent-gold)'; gradeTitle = 'ممتاز! أداء رائع 🏆'; suggestion = 'استمر في هذا المستوى الرائع وساعد زملاءك.'; }
+    else if (pct >= 75) { gradeColor = 'var(--success)'; gradeTitle = 'جيد جداً! 🌟'; suggestion = 'أنت قريب من التميز، راجع النقاط الضعيفة.'; }
+    else if (pct >= 60) { gradeColor = 'var(--accent-primary)'; gradeTitle = 'جيد 👍'; suggestion = 'مراجعة الدروس مع الأسئلة الخاطئة ستحسّن نتيجتك.'; }
+    else if (pct >= 40) { gradeColor = 'var(--warning)'; gradeTitle = 'مقبول - يحتاج مراجعة 📚'; suggestion = 'ركز على المواد الضعيفة واستشر مساعد الذكاء الاصطناعي.'; }
+    else { gradeColor = 'var(--danger)'; gradeTitle = 'يحتاج مجهود أكبر 💪'; suggestion = 'لا تيأس! راجع الدروس من البداية واطلب المساعدة من المعلم.'; }
+
+    const circle = document.getElementById('exam-result-score-circle');
+    circle.style.borderColor = gradeColor;
+    document.getElementById('exam-result-title').innerText = gradeTitle;
+    document.getElementById('exam-result-title').style.color = gradeColor;
+    document.getElementById('exam-result-suggestion').innerText = suggestion;
+
+    const wrongList = document.getElementById('exam-result-wrong-list');
+    wrongList.innerHTML = '';
+    const wrongQuestions = details.filter(d => !d.isCorrect);
+    if (wrongQuestions.length === 0) {
+        wrongList.innerHTML = '<p style="color:var(--success); text-align:center;"><i class="fas fa-check-circle"></i> أحسنت! لم تخطئ في أي سؤال.</p>';
+    } else {
+        wrongQuestions.forEach((d, i) => {
+            const div = document.createElement('div');
+            div.className = 'mini-card';
+            div.style.borderRight = '4px solid var(--danger)';
+            div.style.marginBottom = '12px';
+            div.innerHTML = `
+                <p style="margin:0 0 8px; font-weight:bold; font-size:0.9rem;"><i class="fas fa-times-circle" style="color:var(--danger);margin-left:5px;"></i>${d.q}</p>
+                <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; font-size:0.85rem; color:#aaa;">إجابتك: <span style="color:#fff;">${d.user}</span></div>
+                ${d.type !== 'essay' && d.correct ? `<div style="background:rgba(16,185,129,0.1); padding:8px; border-radius:8px; font-size:0.85rem; margin-top:6px; color:var(--success);">الصحيحة: ${d.correct}</div>` : ''}
+            `;
+            wrongList.appendChild(div);
+        });
+    }
+
+    window._lastExamResultTestId = testId;
+    screen.classList.remove('hidden');
+};
+
+window.closeExamResult = () => {
+    document.getElementById('s-exam-result').classList.add('hidden');
+    activeTest = null; answers = {};
+};
+
+window.retryExamFromResult = () => {
+    const testId = window._lastExamResultTestId;
+    document.getElementById('s-exam-result').classList.add('hidden');
+    if (testId) checkPhoneAndStart(testId);
 };
 
 window.reviewTest = async (id) => {
     playSound('click');
-    const resSnap = await get(ref(db, `results/${id}/${currentUser}`));
-    if(!resSnap.exists()) return saAlert("لم تقم بهذا الاختبار", "info");
+    const resSnap = await get(ref(db, `results/${id}/${currentUser}/latest`)).catch(() => null)
+        || await get(ref(db, `results/${id}/${currentUser}`)).catch(() => null);
+    if(!resSnap || !resSnap.exists()) return saAlert("لم تقم بهذا الاختبار", "info");
     const res = resSnap.val();
-    const div = document.getElementById('review-content'); div.innerHTML = `<h1 style="text-align:center; color:var(--accent-primary); margin-bottom:20px;">${res.percentage}%</h1>`;
+    const pct = res.percentage || 0;
+    const div = document.getElementById('review-content');
+    div.innerHTML = `<h1 style="text-align:center; color:var(--accent-primary); margin-bottom:20px;">${pct}%</h1>`;
     if (res.details && Array.isArray(res.details)) {
         res.details.forEach((d, i) => {
             const isEssay = d.type === 'essay';
             const borderColor = d.isCorrect ? 'var(--success)' : (isEssay ? 'var(--accent-primary)' : 'var(--danger)');
             const icon = d.isCorrect ? '<i class="fas fa-check-circle" style="color:var(--success)"></i>' : (isEssay ? '<i class="fas fa-pen" style="color:var(--accent-primary)"></i>' : '<i class="fas fa-times-circle" style="color:var(--danger)"></i>');
-            
             div.innerHTML += `
                 <div class="mini-card" style="border-right:4px solid ${borderColor}">
                     <div style="display:flex; justify-content:space-between;"><strong>س${i+1}: ${d.q}</strong>${icon}</div>
@@ -3348,3 +3474,133 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./service-worker.js');
     });
 }
+
+// =================== SMART EDITOR ===================
+let _editorActivePrefix = null;
+
+window.editorFormat = (cmd) => { document.execCommand(cmd, false, null); };
+window.editorFontSize = (size) => { document.execCommand('fontSize', false, size); };
+window.editorColor = (color) => { document.execCommand('foreColor', false, color); };
+
+window.editorInsertImage = () => {
+    const prefix = selectedRole === 'teacher' ? 't' : 's';
+    _editorActivePrefix = prefix;
+    document.getElementById(`${prefix}-editor-img-input`).click();
+};
+
+window.editorHandleImage = async (input) => {
+    if (!input.files || !input.files[0]) return;
+    const prefix = _editorActivePrefix || (selectedRole === 'teacher' ? 't' : 's');
+    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
+    const activePage = pagesEl.querySelector('.editor-page:focus') || pagesEl.querySelector('.editor-page:last-child');
+    const b64 = await getBase64(input.files[0]);
+    const img = document.createElement('img');
+    img.src = b64;
+    img.style.cssText = 'max-width:100%; border-radius:8px; margin:10px 0; cursor:pointer; resize:both; display:block;';
+    img.onclick = () => { const cur = img.style.width === '100%' ? '60%' : '100%'; img.style.width = cur; };
+    if (activePage) { activePage.focus(); activePage.appendChild(img); } else { pagesEl.lastElementChild.appendChild(img); }
+    input.value = '';
+};
+
+window.editorAddPage = () => {
+    const prefix = selectedRole === 'teacher' ? 't' : 's';
+    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
+    const newPage = document.createElement('div');
+    const pageNum = pagesEl.children.length + 1;
+    newPage.className = 'editor-page';
+    newPage.contentEditable = 'true';
+    newPage.dir = 'rtl';
+    newPage.dataset.page = pageNum;
+    pagesEl.appendChild(newPage);
+    newPage.focus();
+    showToast(`صفحة ${pageNum}`, 'تمت الإضافة', 'success', 1500);
+};
+
+window.editorSave = () => {
+    const prefix = selectedRole === 'teacher' ? 't' : 's';
+    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
+    const content = Array.from(pagesEl.children).map(p => p.innerHTML);
+    localStorage.setItem(`sa_editor_${currentUser}`, JSON.stringify(content));
+    showToast('تم الحفظ', '', 'success', 1500);
+};
+
+window.editorExportPDF = () => {
+    const prefix = selectedRole === 'teacher' ? 't' : 's';
+    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>body{font-family:Cairo,sans-serif;background:#fff;color:#000;padding:40px;} img{max-width:100%;} .page{page-break-after:always;margin-bottom:40px;min-height:297mm;}</style></head><body>`);
+    Array.from(pagesEl.children).forEach(p => { win.document.write(`<div class="page">${p.innerHTML}</div>`); });
+    win.document.write('</body></html>');
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+};
+
+function loadEditorContent(prefix) {
+    const saved = localStorage.getItem(`sa_editor_${currentUser}`);
+    if (!saved) return;
+    try {
+        const content = JSON.parse(saved);
+        const pagesEl = document.getElementById(`${prefix}-editor-pages`);
+        pagesEl.innerHTML = '';
+        content.forEach((html, i) => {
+            const page = document.createElement('div');
+            page.className = 'editor-page';
+            page.contentEditable = 'true';
+            page.dir = 'rtl';
+            page.dataset.page = i + 1;
+            page.innerHTML = html;
+            pagesEl.appendChild(page);
+        });
+    } catch(e) {}
+}
+
+// Load editor when switching to editor tab
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(tabId, btn) {
+    _origSwitchTab.call(this, tabId, btn);
+    if (tabId.endsWith('-editor')) {
+        const prefix = tabId.charAt(0);
+        setTimeout(() => loadEditorContent(prefix), 100);
+    }
+};
+
+// =================== PROFILE DEEPLINK PREVIEW ===================
+const _origHandleDeepLinks = window.handleDeepLinks;
+window.handleDeepLinks = async function() {
+    const params = new URLSearchParams(window.location.search);
+    const chatUid = params.get('chat');
+    
+    if (chatUid && chatUid !== myUid && currentUser) {
+        let foundUser = null, foundRole = '';
+        try {
+            const sSnap = await get(ref(db, 'users/students'));
+            if (sSnap?.exists()) { Object.entries(sSnap.val()).forEach(([n, d]) => { if (d?.uid === chatUid) { foundUser = {name:n,...d}; foundRole='student'; } }); }
+            if (!foundUser) {
+                const tSnap = await get(ref(db, 'users/teachers'));
+                if (tSnap?.exists()) { Object.entries(tSnap.val()).forEach(([n, d]) => { if (d?.uid === chatUid) { foundUser = {name:n,...d}; foundRole='teacher'; } }); }
+            }
+        } catch(e) {}
+
+        if (foundUser) {
+            const modal = document.getElementById('profile-deeplink-modal');
+            const color = foundRole === 'teacher' ? 'var(--accent-gold)' : 'var(--accent-primary)';
+            const avatar = document.getElementById('pdl-avatar');
+            avatar.innerHTML = `<i class="fas ${foundUser.icon || 'fa-user'}"></i>`;
+            avatar.style.color = color; avatar.style.borderColor = color;
+            document.getElementById('pdl-name').innerText = foundUser.name;
+            document.getElementById('pdl-role').innerText = foundRole === 'teacher' ? 'معلم' : 'طالب';
+            document.getElementById('pdl-chat-btn').onclick = () => {
+                modal.classList.add('hidden');
+                const prefix = selectedRole === 'teacher' ? 't' : 's';
+                switchTab(`${prefix}-dardasha`);
+                setTimeout(() => startChatWithUser(foundUser.name, foundUser.icon, foundUser.uid), 400);
+            };
+            modal.classList.remove('hidden');
+            hideDeepLinkLoader();
+            return;
+        }
+    }
+    
+    if (_origHandleDeepLinks) return _origHandleDeepLinks.call(this);
+};
