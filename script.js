@@ -450,18 +450,40 @@ function loginSuccess(name, icon, uid) {
     document.getElementById('landing-layer').classList.add('hidden');
     document.getElementById('auth-layer').classList.add('hidden');
     updateMenuInfo();
-    
+
+    const portalId = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
+    const portalEl = document.getElementById(portalId);
+
+    // Hide ALL sections first before showing portal
+    if (portalEl) {
+        portalEl.querySelectorAll('.app-section').forEach(s => s.classList.add('hidden'));
+        portalEl.classList.remove('hidden');
+    }
+
+    const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
+    const hashTab = window.location.hash.replace('#', '');
+    const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
+    const startTab = (hashTab && allTabs.includes(hashTab)) ? hashTab : defaultTab;
+
+    // Show only the start tab
+    const startSection = document.getElementById(startTab);
+    if (startSection) startSection.classList.remove('hidden');
+    _currentTabId = startTab;
+    updateTabDots(startTab);
+
+    // Update nav button active state
+    const navBtns = portalEl ? portalEl.querySelectorAll('.nav-btn') : [];
+    const startIdx = allTabs.indexOf(startTab);
+    navBtns.forEach((b, i) => b.classList.toggle('active', i === startIdx));
+
     if (selectedRole === 'teacher') {
-        document.getElementById('teacher-app').classList.remove('hidden');
         initTeacherApp();
         setTimeout(() => initSwipeNavigation('teacher-app'), 500);
     } else {
-        document.getElementById('student-app').classList.remove('hidden');
         loadStudentExams(); loadStudentGrades(); initStudentReese();
         updateStreakOnLogin();
         setTimeout(() => renderXPHud(), 300);
         setTimeout(() => initSwipeNavigation('student-app'), 500);
-        // Initialize student AI welcome screen early
         setTimeout(() => { if (!currentChatId) startNewChat('s'); }, 100);
     }
     initDardasha();
@@ -470,9 +492,6 @@ function loginSuccess(name, icon, uid) {
     initKeyboardFix();
     handleDeepLinksAndRouting();
     showTabDots();
-    const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
-    _currentTabId = window.location.hash.replace('#','') || defaultTab;
-    updateTabDots(_currentTabId);
     if (selectedRole === 'student') {
         setTimeout(() => {
             startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
@@ -804,14 +823,16 @@ window.switchTab = (tabId, btn) => {
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const isAI = tabId.endsWith('-ai');
 
-    // Hide old section immediately - no overlap
-    const oldSection = _currentTabId ? document.getElementById(_currentTabId) : null;
-    if (oldSection) {
-        oldSection.classList.add('hidden');
-        oldSection.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
+    // Hide ALL app sections inside the active portal — bulletproof approach
+    const portalEl = document.getElementById(portal);
+    if (portalEl) {
+        portalEl.querySelectorAll('.app-section').forEach(s => {
+            s.classList.add('hidden');
+            s.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
+        });
     }
 
-    // Show new section
+    // Show ONLY the target section
     newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
 
     _currentTabId = tabId;
