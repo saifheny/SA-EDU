@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
     <title>SA Educational Institution | منصة التعليم الذكي</title>
     <meta name="description" content="منصة SA EDU التعليمية الرائدة، النظام المتكامل لإدارة التعلم والاختبارات الإلكترونية المدعوم بالذكاء الاصطناعي. منصة شاملة للطلاب والمعلمين، اختبارات تفاعلية، تصحيح تلقائي، مساعد دراسي ذكي، وشبكة تواصل تعليمية. تغطية شاملة للمناهج الدراسية للمراحل الابتدائية، الإعدادية، والثانوية.">
     <meta name="keywords" content="تعليم, منصة تعليمية, اختبارات اونلاين, ذكاء اصطناعي في التعليم, SA EDU, SA Educational, نظام إدارة التعلم, LMS, امتحانات الكترونية, تصحيح تلقائي, بنك أسئلة, الثانوية العامة, المناهج المصرية, المناهج السعودية, تعليم الكتروني, مراجعات نهائية, فيزياء, كيمياء, رياضيات, أحياء, لغة عربية, لغة انجليزية, الصف الأول الثانوي, الصف الثاني الثانوي, الصف الثالث الثانوي, المرحلة الإعدادية, المرحلة الابتدائية, مساعد ذكي, حل واجبات, مدرس خصوصي, منصة ريس, دردشة تعليمية, تطبيق تعليمي, تعليم عن بعد, فصول افتراضية, نتائج الطلاب, متابعة ولي الأمر, الذكاء الاصطناعي, AI Education, EdTech, E-learning Platform, Online Exams">
@@ -132,6 +132,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <button class="nav-btn" onclick="switchTab('t-reese', this)"><i class="fas fa-feather-alt"></i><span>ريس</span></button>
                 <button class="nav-btn" onclick="switchTab('t-dardasha', this)"><i class="fab fa-telegram-plane"></i><span>دردشة</span></button>
                 <button class="nav-btn magic-btn" onclick="switchTab('t-ai', this)"><i class="fas fa-wand-magic-sparkles"></i><span>AI</span></button>
+                <button class="nav-btn" onclick="switchTab('t-editor', this)"><i class="fas fa-pen-nib"></i><span>محرر</span></button>
                 <button class="nav-btn" onclick="toggleMenu()"><i class="fas fa-bars"></i><span>القائمة</span></button>
             </div>
         </nav>
@@ -149,7 +150,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                             <p style="margin: 4px 0 0; color: #ccc; font-size: 0.85rem;">انقر للبدء في إنشاء اختبار جديد للطلاب</p>
                         </div>
                     </div>
-                    <div style="color: #666; position:relative; z-index:2;"><i class="fas fa-chevron-left"></i></div>
+                    <div style="color: #666; position:relative; z-index:2;"><i class="fas fa-chevron-right"></i></div>
                 </div>
                 <div class="search-wrap">
                     <i class="fas fa-search search-icon"></i>
@@ -329,16 +330,45 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     </div>
                 </div>
             </section>
+
+            <section id="t-editor" class="app-section hidden smart-editor-section">
+                <div class="mobile-spacer"></div>
+                <div class="editor-toolbar">
+                    <div class="editor-tool-group">
+                        <button class="editor-tool-btn" onclick="editorFormat('bold')" title="عريض"><i class="fas fa-bold"></i></button>
+                        <button class="editor-tool-btn" onclick="editorFormat('italic')" title="مائل"><i class="fas fa-italic"></i></button>
+                        <button class="editor-tool-btn" onclick="editorFormat('underline')" title="تحته خط"><i class="fas fa-underline"></i></button>
+                    </div>
+                    <div class="editor-tool-group">
+                        <select class="editor-select" onchange="editorFontSize(this.value)">
+                            <option value="3">عادي</option>
+                            <option value="5">كبير</option>
+                            <option value="6">أكبر</option>
+                            <option value="2">صغير</option>
+                        </select>
+                        <input type="color" class="editor-color-pick" onchange="editorColor(this.value)" title="لون النص" value="#ffffff">
+                    </div>
+                    <div class="editor-tool-group">
+                        <button class="editor-tool-btn" onclick="editorInsertImage()" title="إدراج صورة"><i class="fas fa-image"></i></button>
+                        <button class="editor-tool-btn" onclick="editorAddPage()" title="صفحة جديدة"><i class="fas fa-plus-square"></i></button>
+                        <button class="editor-tool-btn" onclick="editorExportPDF()" title="تصدير PDF"><i class="fas fa-file-pdf" style="color:#ef4444;"></i></button>
+                        <button class="editor-tool-btn" onclick="editorSave()" title="حفظ"><i class="fas fa-save" style="color:#10b981;"></i></button>
+                    </div>
+                </div>
+                <div class="editor-pages-container" id="t-editor-pages">
+                    <div class="editor-page" contenteditable="true" dir="rtl" data-page="1"></div>
+                </div>
+                <input type="file" id="t-editor-img-input" hidden accept="image/*" onchange="editorHandleImage(this)">
+            </section>
         </div>
     </div>
-
-    <div id="student-app" class="hidden">
         <nav class="top-nav">
             <div class="nav-container">
                 <button class="nav-btn active" onclick="switchTab('s-exams', this)"><i class="fas fa-book-open"></i><span>اختبارات</span></button>
                 <button class="nav-btn" onclick="switchTab('s-reese', this)"><i class="fas fa-feather-alt"></i><span>ريس</span></button>
                 <button class="nav-btn" onclick="switchTab('s-dardasha', this)"><i class="fab fa-telegram-plane"></i><span>دردشة</span></button>
                 <button class="nav-btn magic-btn" onclick="switchTab('s-ai', this)"><i class="fas fa-wand-magic-sparkles"></i><span>AI</span></button>
+                <button class="nav-btn" onclick="switchTab('s-editor', this)"><i class="fas fa-pen-nib"></i><span>محرر</span></button>
                 <button class="nav-btn" onclick="toggleMenu()"><i class="fas fa-bars"></i><span>القائمة</span></button>
             </div>
         </nav>
@@ -486,6 +516,38 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
+            </section>
+
+            <section id="s-editor" class="app-section hidden smart-editor-section">
+                <div class="mobile-spacer"></div>
+                <div class="editor-toolbar">
+                    <div class="editor-tool-group">
+                        <button class="editor-tool-btn" onclick="editorFormat('bold')" title="عريض"><i class="fas fa-bold"></i></button>
+                        <button class="editor-tool-btn" onclick="editorFormat('italic')" title="مائل"><i class="fas fa-italic"></i></button>
+                        <button class="editor-tool-btn" onclick="editorFormat('underline')" title="تحته خط"><i class="fas fa-underline"></i></button>
+                    </div>
+                    <div class="editor-tool-group">
+                        <select class="editor-select" onchange="editorFontSize(this.value)">
+                            <option value="3">عادي</option>
+                            <option value="5">كبير</option>
+                            <option value="6">أكبر</option>
+                            <option value="2">صغير</option>
+                        </select>
+                        <input type="color" class="editor-color-pick" onchange="editorColor(this.value)" title="لون النص" value="#ffffff">
+                    </div>
+                    <div class="editor-tool-group">
+                        <button class="editor-tool-btn" onclick="editorInsertImage()" title="إدراج صورة"><i class="fas fa-image"></i></button>
+                        <button class="editor-tool-btn" onclick="editorAddPage()" title="صفحة جديدة"><i class="fas fa-plus-square"></i></button>
+                        <button class="editor-tool-btn" onclick="editorExportPDF()" title="تصدير PDF"><i class="fas fa-file-pdf" style="color:#ef4444;"></i></button>
+                        <button class="editor-tool-btn" onclick="editorSave()" title="حفظ"><i class="fas fa-save" style="color:#10b981;"></i></button>
+                    </div>
+                </div>
+                <div class="editor-pages-container" id="s-editor-pages">
+                    <div class="editor-page" contenteditable="true" dir="rtl" data-page="1"></div>
+                </div>
+                <input type="file" id="s-editor-img-input" hidden accept="image/*" onchange="editorHandleImage(this)">
+            </section>
+
             <section id="s-taking-test" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 800px; margin: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -495,6 +557,25 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     <h2 id="active-test-title" style="text-align: center; color: var(--accent-gold); margin-bottom: 30px;">...</h2>
                     <div id="test-questions-render" style="margin-bottom: 60px;"></div>
                     <button onclick="submitExam()" class="modern-btn" style="background: var(--success); color: white; margin-bottom: 50px;">تسليم الإجابة</button>
+                </div>
+            </section>
+
+            <section id="s-exam-result" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3100; padding: 20px; overflow-y: auto;">
+                <div style="max-width: 700px; margin: auto; padding-bottom: 60px;">
+                    <div class="exam-result-header">
+                        <div class="exam-result-avatar"><i class="fas fa-graduation-cap"></i></div>
+                        <div id="exam-result-score-circle" class="exam-result-score-circle">
+                            <span id="exam-result-pct">0%</span>
+                        </div>
+                        <h2 id="exam-result-title" style="color:#fff; margin:15px 0 5px; text-align:center;"></h2>
+                        <p id="exam-result-suggestion" style="color:#aaa; text-align:center; font-size:0.9rem;"></p>
+                    </div>
+                    <h3 style="color:#888; margin-top:30px; font-size:0.95rem;">الأسئلة التي تحتاج مراجعة:</h3>
+                    <div id="exam-result-wrong-list"></div>
+                    <div style="display:flex; gap:10px; margin-top:30px;">
+                        <button onclick="closeExamResult()" class="modern-btn secondary" style="flex:1;"><i class="fas fa-arrow-right"></i> رجوع</button>
+                        <button onclick="retryExamFromResult()" class="modern-btn" style="flex:1; background:var(--accent-primary);"><i class="fas fa-redo"></i> إعادة المحاولة</button>
+                    </div>
                 </div>
             </section>
             
@@ -715,19 +796,37 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         <div class="pwa-content">
             <img src="https://i.postimg.cc/BQQb5YDn/MOWU-DESIGN.png" alt="SA EDU App" class="pwa-icon">
             <div class="pwa-info">
-                <h4>تثبيت SA EDU</h4>
-                <p>تجربة أفضل وأسرع</p>
+                <h4 style="margin:0; font-size:1rem; color:#fff;">SA EDU — تجربة أفضل</h4>
+                <p style="margin:2px 0 0; color:#aaa; font-size:0.78rem;">تثبيت التطبيق للوصول السريع بدون متصفح</p>
             </div>
         </div>
         <div class="pwa-actions">
-            <button class="pwa-btn close" onclick="closePWA()">إغلاق</button>
-            <button class="pwa-btn install" onclick="installPWA()">تثبيت</button>
+            <button class="pwa-btn close" onclick="closePWA()"><i class="fas fa-times"></i></button>
+            <button class="pwa-btn install" onclick="installPWA()"><i class="fas fa-download"></i> تثبيت</button>
         </div>
     </div>
 
     <div id="sa-toast-container"></div>
 
     <div id="tab-dots" class="tab-dots hidden"></div>
+
+    <div id="exam-grading-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
+        <div class="construction-loader"></div>
+        <div style="color:#fff;font-size:1.2rem;font-weight:bold;">جاري تصحيح الامتحان...</div>
+        <div style="color:#aaa;font-size:0.9rem;">يتم تحليل الإجابات بالذكاء الاصطناعي</div>
+    </div>
+
+    <div id="profile-deeplink-modal" class="hidden">
+        <div class="bottom-sheet-content" style="background:#111; text-align:center; max-width:400px; margin:auto;">
+            <div class="avatar-frame" id="pdl-avatar" style="width:80px;height:80px;font-size:2.5rem;margin:0 auto 15px;"></div>
+            <h3 id="pdl-name" style="margin:0 0 5px;"></h3>
+            <span id="pdl-role" style="font-size:0.8rem;background:#333;padding:3px 12px;border-radius:15px;color:#aaa;"></span>
+            <div style="display:flex;gap:10px;margin-top:25px;">
+                <button onclick="document.getElementById('profile-deeplink-modal').classList.add('hidden')" class="modern-btn secondary" style="flex:1;">إلغاء</button>
+                <button id="pdl-chat-btn" class="modern-btn" style="flex:1;background:var(--accent-primary);">بدء الدردشة <i class="fas fa-comment"></i></button>
+            </div>
+        </div>
+    </div>
 
     <script>
     function toggleAiSendMic(role, value) {
