@@ -453,25 +453,22 @@ function loginSuccess(name, icon, uid) {
 
     const portalId = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
     const portalEl = document.getElementById(portalId);
+    const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
 
-    // Hide ALL sections first before showing portal
     if (portalEl) {
-        portalEl.querySelectorAll('.app-section').forEach(s => s.classList.add('hidden'));
+        portalEl.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
         portalEl.classList.remove('hidden');
     }
 
     const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
     const hashTab = window.location.hash.replace('#', '');
-    const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const startTab = (hashTab && allTabs.includes(hashTab)) ? hashTab : defaultTab;
 
-    // Show only the start tab
     const startSection = document.getElementById(startTab);
-    if (startSection) startSection.classList.remove('hidden');
+    if (startSection) startSection.classList.add('active');
     _currentTabId = startTab;
     updateTabDots(startTab);
 
-    // Update nav button active state
     const navBtns = portalEl ? portalEl.querySelectorAll('.nav-btn') : [];
     const startIdx = allTabs.indexOf(startTab);
     navBtns.forEach((b, i) => b.classList.toggle('active', i === startIdx));
@@ -822,19 +819,13 @@ window.switchTab = (tabId, btn) => {
 
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     const isAI = tabId.endsWith('-ai');
-
-    // Hide ALL app sections inside the active portal — bulletproof approach
     const portalEl = document.getElementById(portal);
+
     if (portalEl) {
-        portalEl.querySelectorAll('.app-section').forEach(s => {
-            s.classList.add('hidden');
-            s.classList.remove('page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-        });
+        portalEl.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
     }
 
-    // Show ONLY the target section
-    newSection.classList.remove('hidden','page-exit-right','page-exit-left','page-enter-right','page-enter-left','section-enter','section-enter-left');
-
+    newSection.classList.add('active');
     _currentTabId = tabId;
 
     if (btn) {
