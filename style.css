@@ -1852,17 +1852,9 @@ white-space: nowrap;
 overflow: hidden;
 text-overflow: ellipsis;
 }
-.app-section {
-animation: none;
-}
 
-/* AI section must be a positioned container for its absolute-positioned ai-layout child */
-#s-ai, #t-ai {
-position: relative !important;
-height: calc(100vh - var(--nav-height) - 15px);
-padding: 0 !important;
-overflow: hidden;
-}
+
+
 .search-user-btn {
 background: linear-gradient(135deg, var(--accent-primary), #2563eb);
 color: white;
@@ -3469,15 +3461,7 @@ transform: translateX(0) translateY(0);
 }
 
 /* =================== SMART EDITOR =================== */
-.smart-editor-section {
-    padding: 0 !important;
-    flex-direction: column !important;
-    height: calc(100vh - var(--nav-height) - 15px) !important;
-    overflow: hidden !important;
-}
-.smart-editor-section:not(.hidden) {
-    display: flex !important;
-}
+
 .editor-toolbar {
     display: flex;
     gap: 8px;
@@ -3623,3 +3607,56 @@ transform: translateX(0) translateY(0);
 /* =================== EXAM GRADING OVERLAY =================== */
 #exam-grading-overlay.hidden { display: none !important; }
 #exam-grading-overlay:not(.hidden) { display: flex !important; }
+
+/* ===================================================
+   ACTIVE SECTION SYSTEM — ONE SECTION AT A TIME
+   =================================================== */
+
+/* All tab sections hidden by default */
+.app-section {
+    display: none !important;
+}
+
+/* Only the active section is visible */
+.app-section.active {
+    display: block !important;
+    animation: none;
+}
+
+/* AI sections need relative positioning for inner absolute layout */
+#s-ai.active,
+#t-ai.active {
+    display: block !important;
+    position: relative !important;
+    height: calc(100vh - var(--nav-height) - 15px) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Editor sections need flex layout */
+.app-section.active.smart-editor-section {
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    height: calc(100vh - var(--nav-height) - 15px) !important;
+    overflow: hidden !important;
+}
+
+/* Overlay sections (fixed full-screen) use .hidden class — NOT the tab system */
+.overlay-section {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 3000;
+    padding: 20px;
+    overflow-y: auto;
+}
+.overlay-section.hidden {
+    display: none !important;
+}
+.overlay-section:not(.hidden) {
+    display: block !important;
+}
+#s-exam-result {
+    z-index: 3100;
+}
