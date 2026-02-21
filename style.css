@@ -3849,3 +3849,350 @@ transform: translateX(0) translateY(0);
     background: #111 !important;
     box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
 }
+
+/* ============================================================ 
+   CHATGPT-STYLE AI REDESIGN - ENHANCED
+   ============================================================ */
+
+/* Welcome screen - ChatGPT style */
+.ai-welcome-screen {
+    padding: 30px 20px 20px !important;
+}
+.ai-logo-large {
+    width: 48px !important;
+    height: 48px !important;
+    font-size: 1.3rem !important;
+}
+.ai-welcome-title {
+    font-size: 1.4rem !important;
+    font-weight: 600 !important;
+    color: #ececec !important;
+    letter-spacing: -0.3px;
+}
+.ai-chip {
+    font-size: 0.82rem !important;
+    padding: 8px 14px !important;
+    border-radius: 10px !important;
+    transition: all 0.15s !important;
+    cursor: pointer;
+}
+.ai-chip:hover {
+    background: #3a3a3a !important;
+    border-color: #555 !important;
+    color: #fff !important;
+}
+.ai-chip i {
+    margin-left: 6px;
+    font-size: 0.85rem;
+}
+
+/* Messages area */
+.ai-messages {
+    padding: 20px 0 130px !important;
+}
+
+/* User message - ChatGPT style */
+.chat-msg.user {
+    background: #2f2f2f !important;
+    border-radius: 18px !important;
+    padding: 12px 18px !important;
+    max-width: 72% !important;
+    font-size: 0.95rem !important;
+    color: #ececec !important;
+    line-height: 1.65;
+}
+
+/* AI message - full width like ChatGPT */
+.chat-msg.ai {
+    background: transparent !important;
+    padding: 4px 0 !important;
+    max-width: 100% !important;
+    font-size: 0.95rem !important;
+    line-height: 1.75;
+    color: #ececec !important;
+}
+
+/* AI avatar - small green circle like ChatGPT */
+.ai-msg-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #10a37f, #0d8a6b) !important;
+    font-size: 0.7rem !important;
+    flex-shrink: 0 !important;
+    margin-top: 3px !important;
+    box-shadow: 0 2px 8px rgba(16,163,127,0.4) !important;
+}
+
+/* AI action buttons below message */
+.msg-ai-actions {
+    opacity: 0;
+    transition: opacity 0.2s;
+    margin-top: 6px;
+    margin-right: 38px;
+}
+.chat-msg-wrap.ai:hover .msg-ai-actions { opacity: 1; }
+.msg-action-btn {
+    color: #555 !important;
+    font-size: 0.8rem !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+}
+.msg-action-btn:hover { 
+    background: rgba(255,255,255,0.07) !important; 
+    color: #aaa !important; 
+}
+.msg-action-btn.liked { color: #10a37f !important; }
+
+/* Input bar - ChatGPT style pill */
+.gemini-input-wrapper {
+    background: linear-gradient(to top, #212121 70%, rgba(33,33,33,0)) !important;
+    padding: 10px 16px 20px !important;
+}
+.gemini-input-container {
+    background: #2f2f2f !important;
+    border-radius: 26px !important;
+    padding: 10px 14px !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    max-width: 720px !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+.gemini-input-container:focus-within {
+    border-color: rgba(255,255,255,0.18) !important;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.06) !important;
+}
+.gemini-text-input {
+    font-size: 0.95rem !important;
+    padding: 2px 4px !important;
+    line-height: 1.5 !important;
+}
+.gemini-text-input::placeholder { color: #5a5a5a !important; }
+.gemini-mic-btn {
+    background: transparent !important;
+    color: #8e8ea0 !important;
+    border: none !important;
+    width: 34px !important; height: 34px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 50% !important;
+    font-size: 1rem !important;
+    cursor: pointer !important;
+    transition: all 0.15s !important;
+    flex-shrink: 0 !important;
+    align-self: flex-end;
+}
+.gemini-mic-btn:hover { 
+    background: rgba(255,255,255,0.08) !important; 
+    color: #ccc !important;
+}
+.gemini-mic-btn.recording {
+    color: #ef4444 !important;
+    animation: micPulse 1s ease-in-out infinite !important;
+}
+@keyframes micPulse {
+    0%, 100% { background: rgba(239,68,68,0.1); }
+    50% { background: rgba(239,68,68,0.25); }
+}
+.gemini-send-btn {
+    background: #fff !important;
+    color: #212121 !important;
+    border: none !important;
+    width: 34px !important; height: 34px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    font-size: 0.9rem !important;
+    transition: all 0.15s !important;
+    flex-shrink: 0 !important;
+    align-self: flex-end;
+}
+.gemini-send-btn:hover { 
+    background: #e5e5e5 !important; 
+    transform: scale(1.05) !important;
+}
+
+/* Paperclip icon */
+.gemini-img-btn {
+    color: #8e8ea0 !important;
+    font-size: 1rem !important;
+    transition: all 0.15s !important;
+    align-self: flex-end;
+    margin-bottom: 1px;
+}
+.gemini-img-btn:hover { color: #ccc !important; }
+
+/* Top bar - model name section like ChatGPT */
+.ai-top-bar {
+    padding: 8px 14px !important;
+    border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+    background: #212121 !important;
+}
+
+/* ChatGPT-style model selector in center */
+.ai-model-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #8e8ea0;
+    cursor: default;
+    transition: all 0.15s;
+    font-family: 'Outfit', sans-serif;
+}
+.ai-model-chip:hover {
+    background: rgba(255,255,255,0.07);
+    color: #ececec;
+}
+.ai-model-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #10a37f;
+    box-shadow: 0 0 6px rgba(16,163,127,0.6);
+    animation: modelDotPulse 2s ease-in-out infinite;
+}
+@keyframes modelDotPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* Thinking animation - cleaner */
+.ai-thinking-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+}
+.ai-thinking-dots span {
+    width: 5px !important;
+    height: 5px !important;
+    border-radius: 50% !important;
+    background: #555 !important;
+    display: inline-block;
+    margin: 0 2px;
+    animation: aiDotBounce 1.2s ease-in-out infinite !important;
+}
+.ai-thinking-dots span:nth-child(2) { animation-delay: 0.2s !important; }
+.ai-thinking-dots span:nth-child(3) { animation-delay: 0.4s !important; }
+@keyframes aiDotBounce {
+    0%, 60%, 100% { transform: translateY(0); background: #555; }
+    30% { transform: translateY(-5px); background: #10a37f; }
+}
+
+/* Image preview above input */
+.chat-img-preview {
+    display: none;
+    position: relative;
+    max-width: 120px;
+    margin: 8px auto 0;
+}
+.chat-img-preview.active { display: block; }
+.chat-img-preview > i {
+    position: absolute;
+    top: -8px;
+    left: -8px;
+    background: #333;
+    border-radius: 50%;
+    width: 20px; height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: #ccc;
+    z-index: 2;
+}
+.chat-img-preview img {
+    width: 100%;
+    border-radius: 10px;
+    border: 1px solid #333;
+}
+
+/* Shared chat banner */
+.shared-chat-banner {
+    text-align: center;
+    background: rgba(16,163,127,0.1);
+    border: 1px solid rgba(16,163,127,0.2);
+    padding: 8px 16px;
+    margin: 10px 16px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    color: #aaa;
+}
+
+/* Deep link loader - improved */
+#deeplink-loader {
+    background: rgba(0,0,0,0.9) !important;
+    backdrop-filter: blur(12px) !important;
+}
+#deeplink-loader p {
+    color: #ccc !important;
+    font-size: 1rem !important;
+}
+
+/* Pending link banner - show before login */
+.pending-link-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    background: linear-gradient(135deg, #10a37f, #1a7f64);
+    color: #fff;
+    text-align: center;
+    padding: 12px 20px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    animation: slideDown 0.3s ease;
+}
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
+/* Code blocks in AI - ChatGPT style */
+.chat-msg pre {
+    background: #1e1e1e !important;
+    border: 1px solid #333 !important;
+    border-radius: 10px !important;
+    padding: 16px !important;
+    position: relative;
+    margin-top: 10px !important;
+}
+.chat-msg pre::before {
+    content: 'كود';
+    position: absolute;
+    top: 8px;
+    left: 12px;
+    font-size: 0.7rem;
+    color: #666;
+    font-family: monospace;
+}
+
+/* Markdown formatting in AI messages */
+.chat-msg h1, .chat-msg h2, .chat-msg h3 {
+    color: #ececec;
+    margin: 14px 0 6px;
+    line-height: 1.3;
+}
+.chat-msg h1 { font-size: 1.2rem; }
+.chat-msg h2 { font-size: 1.1rem; }
+.chat-msg h3 { font-size: 1rem; }
+.chat-msg.ai ul, .chat-msg.ai ol {
+    padding-right: 22px !important;
+    margin: 8px 0 !important;
+}
+.chat-msg.ai li {
+    margin-bottom: 5px !important;
+    color: #ddd !important;
+    line-height: 1.6;
+}
