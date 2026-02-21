@@ -304,16 +304,16 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <section id="t-ai" class="app-section">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
-                        <div style="display:flex; gap:8px; align-items:center;">
+                        <div style="display:flex; gap:6px; align-items:center;">
                             <button class="ai-action-btn new-chat" onclick="startNewChat('t')" title="محادثة جديدة"><i class="fas fa-plus"></i></button>
                             <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-clock-rotate-left"></i></button>
                             <button class="ai-action-btn incognito" id="t-incognito-btn" onclick="toggleIncognito('t')" title="محادثة مخفية"><i class="fas fa-user-secret"></i></button>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px; color:#8e8ea0; font-size:0.82rem; font-weight:600;">
-                            <div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#10a37f,#1a7f64);display:flex;align-items:center;justify-content:center;"><i class="fas fa-comment-dots" style="font-size:0.6rem;color:#fff;"></i></div>
+                        <div class="ai-model-chip">
+                            <div class="ai-model-dot"></div>
                             SA AI
                         </div>
-                        <div style="display:flex; gap:8px;">
+                        <div style="display:flex; gap:6px;">
                             <button class="ai-action-btn" onclick="shareCurrentChat()" title="مشاركة المحادثة"><i class="fas fa-share-nodes"></i></button>
                         </div>
                     </div>
@@ -465,16 +465,16 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <section id="s-ai" class="app-section">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
-                        <div style="display:flex; gap:8px; align-items:center;">
+                        <div style="display:flex; gap:6px; align-items:center;">
                             <button class="ai-action-btn new-chat" onclick="startNewChat('s')" title="محادثة جديدة"><i class="fas fa-plus"></i></button>
                             <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-clock-rotate-left"></i></button>
                             <button class="ai-action-btn incognito" id="s-incognito-btn" onclick="toggleIncognito('s')" title="محادثة مخفية"><i class="fas fa-user-secret"></i></button>
                         </div>
-                        <div style="display:flex; align-items:center; gap:6px; color:#8e8ea0; font-size:0.82rem; font-weight:600;">
-                            <div style="width:18px;height:18px;border-radius:50%;background:linear-gradient(135deg,#10a37f,#1a7f64);display:flex;align-items:center;justify-content:center;"><i class="fas fa-comment-dots" style="font-size:0.6rem;color:#fff;"></i></div>
+                        <div class="ai-model-chip">
+                            <div class="ai-model-dot"></div>
                             SA AI
                         </div>
-                        <div style="display:flex; gap:8px;">
+                        <div style="display:flex; gap:6px;">
                             <button class="ai-action-btn" onclick="shareCurrentChat()" title="مشاركة المحادثة"><i class="fas fa-share-nodes"></i></button>
                         </div>
                     </div>
