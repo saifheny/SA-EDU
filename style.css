@@ -3471,10 +3471,12 @@ transform: translateX(0) translateY(0);
 /* =================== SMART EDITOR =================== */
 .smart-editor-section {
     padding: 0 !important;
-    display: flex !important;
     flex-direction: column !important;
     height: calc(100vh - var(--nav-height) - 15px) !important;
     overflow: hidden !important;
+}
+.smart-editor-section:not(.hidden) {
+    display: flex !important;
 }
 .editor-toolbar {
     display: flex;
@@ -3603,24 +3605,7 @@ transform: translateX(0) translateY(0);
     100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
 }
 
-/* =================== PWA BANNER ENHANCED =================== */
-#pwa-install-banner.visible {
-    display: flex !important;
-}
-#pwa-install-banner {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 9999;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    border-bottom: 1px solid rgba(124,58,237,0.3);
-    padding: 12px 16px;
-    flex-direction: column;
-    gap: 10px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-}
+/* PWA banner styling kept in original CSS */
 
 /* =================== PROFILE DEEPLINK MODAL =================== */
 #profile-deeplink-modal {
@@ -3633,8 +3618,8 @@ transform: translateX(0) translateY(0);
     justify-content: center;
     padding: 20px;
 }
-#profile-deeplink-modal.hidden { display: none; }
+#profile-deeplink-modal.hidden { display: none !important; }
 
 /* =================== EXAM GRADING OVERLAY =================== */
-#exam-grading-overlay { display: none !important; }
+#exam-grading-overlay.hidden { display: none !important; }
 #exam-grading-overlay:not(.hidden) { display: flex !important; }
