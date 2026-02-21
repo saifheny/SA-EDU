@@ -293,24 +293,42 @@ function getMultipleSkeletons(count = 3) {
 }
 
 function getEmptyStateHTML(type) {
-    if(type === 'posts') {
-        return `<div class="empty-state-container"><div class="empty-avatar"><i class="fas fa-box-open" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد منشورات حالياً</h3><p style="color:#555; font-size:0.9rem;">كن أول من يشارك أفكاره!</p></div>`;
-    } else if (type === 'exams') {
-        return `<div class="empty-state-container"><div class="empty-avatar"><i class="fas fa-folder-open" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد اختبارات</h3><p style="color:#555; font-size:0.9rem;">استمتع بوقتك، لا يوجد ضغط الآن.</p></div>`;
-    } else if (type === 'chats') {
-        return `<div class="empty-state-container dardasha-empty-state">
-            <div class="dardasha-empty-avatar">
-                <div class="dardasha-orb-pulse"></div>
-                <i class="fab fa-telegram-plane dardasha-empty-icon"></i>
-            </div>
-            <h3 style="color:#888; margin: 15px 0 8px;">لا توجد محادثات بعد</h3>
-            <p style="color:#555; font-size:0.9rem; margin-bottom: 20px;">ابدأ محادثة مع أي شخص الآن</p>
-            <button class="dardasha-start-btn" onclick="toggleUserSearchModal()">
-                <i class="fas fa-plus"></i> ابدأ محادثة جديدة
-            </button>
+    const states = {
+        posts: {
+            icon: 'fas fa-pen-to-square',
+            title: 'لا توجد منشورات',
+            desc: 'كن أول من يشارك أفكاره',
+        },
+        exams: {
+            icon: 'fas fa-file-lines',
+            title: 'لا توجد اختبارات',
+            desc: 'لا يوجد اختبارات متاحة الآن',
+        },
+        chats: {
+            icon: 'fas fa-message',
+            title: 'لا توجد محادثات',
+            desc: 'ابدأ محادثة مع أي شخص',
+            action: `<button class="empty-action-btn" onclick="toggleUserSearchModal()"><i class="fas fa-plus"></i> محادثة جديدة</button>`
+        },
+        results: {
+            icon: 'fas fa-chart-simple',
+            title: 'لا توجد نتائج',
+            desc: 'لم يؤدِ أي طالب هذا الاختبار بعد',
+        },
+        history: {
+            icon: 'fas fa-clock-rotate-left',
+            title: 'لا يوجد سجل',
+            desc: 'ستظهر محادثاتك هنا',
+        },
+    };
+    const s = states[type] || { icon: 'fas fa-inbox', title: 'لا يوجد محتوى', desc: '' };
+    return `
+        <div class="empty-state-container">
+            <div class="empty-avatar"><i class="${s.icon}"></i></div>
+            <h3>${s.title}</h3>
+            <p>${s.desc}</p>
+            ${s.action || ''}
         </div>`;
-    }
-    return '';
 }
 
 window.saAlert = (msg, type = 'info', title = null) => {
@@ -2190,7 +2208,7 @@ function renderHistoryList() {
             // Fallback from localStorage
             history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
         }
-        if(history.length === 0) { list.innerHTML = '<p style="color:#666; text-align:center; margin-top:20px;">لا يوجد سجل محادثات</p>'; return; }
+        if(history.length === 0) { list.innerHTML = getEmptyStateHTML('history'); return; }
         history.forEach(chat => {
             const item = document.createElement('div');
             item.className = 'history-item';
@@ -2200,7 +2218,7 @@ function renderHistoryList() {
     }).catch(() => {
         const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
         list.innerHTML = '';
-        if(history.length === 0) { list.innerHTML = '<p style="color:#666; text-align:center; margin-top:20px;">لا يوجد سجل محادثات</p>'; return; }
+        if(history.length === 0) { list.innerHTML = getEmptyStateHTML('history'); return; }
         history.forEach(chat => {
             const item = document.createElement('div');
             item.className = 'history-item';
@@ -2632,7 +2650,7 @@ window.loadTestResults = (testId) => {
     const div = document.getElementById('t-results-container'); div.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>';
     get(ref(db, `results/${testId}`)).then(async snap => {
         div.innerHTML = '';
-        if(!snap.exists()) return div.innerHTML = '<p style="text-align:center; color:#666;">لا توجد نتائج لهذا الاختبار بعد</p>';
+        if(!snap.exists()) return div.innerHTML = getEmptyStateHTML('results');
         snap.forEach(c => {
             const studentName = c.key; const v = c.val(); const color = v.percentage >= 50 ? 'var(--success)' : 'var(--danger)';
             const el = document.createElement('div'); el.className = 'mini-card';
@@ -3529,7 +3547,7 @@ window.openLeaderboard = async () => {
 
     const snap = await get(ref(db, 'xp_scores'));
     list.innerHTML = '';
-    if (!snap.exists()) { list.innerHTML = '<p style="color:#666; text-align:center;">لا يوجد بيانات بعد</p>'; return; }
+    if (!snap.exists()) { list.innerHTML = getEmptyStateHTML('results'); return; }
 
     const entries = [];
     snap.forEach(child => { entries.push({ name: child.val().name || child.key, xp: child.val().xp || 0 }); });
@@ -3547,7 +3565,7 @@ window.openLeaderboard = async () => {
         `;
         list.appendChild(div);
     });
-    if (entries.length === 0) list.innerHTML = '<p style="color:#666; text-align:center;">لا يوجد بيانات كافية بعد</p>';
+    if (entries.length === 0) list.innerHTML = getEmptyStateHTML('results');
 };
 
 const _origSubmitExam = window.submitExam;
