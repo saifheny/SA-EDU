@@ -28,7 +28,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
     <link rel="stylesheet" href="style.css">
-    
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <script type="application/ld+json">
     {
@@ -723,7 +722,43 @@
 
     <div id="sa-toast-container"></div>
 
-    <div id="tab-dots" class="tab-dots hidden"></div>
+    <!-- tab-dots removed - swipe navigation active -->
+
+    <!-- ============ VOICE CALL SYSTEM ============ -->
+    <div id="voice-call-screen">
+        <div class="vc-bg-glow"></div>
+        <div class="vc-avatar-ring">
+            <div class="vc-avatar-inner" id="vc-other-avatar"><i class="fas fa-user"></i></div>
+        </div>
+        <div class="vc-name" id="vc-other-name">...</div>
+        <div class="vc-status ringing" id="vc-status">جاري الاتصال...</div>
+        <div class="vc-timer hidden" id="vc-timer">00:00</div>
+        <div class="vc-dock">
+            <button class="vc-dock-btn mute" id="vc-mute-btn" onclick="vcToggleMute()" title="كتم">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button class="vc-dock-btn hangup" onclick="vcHangup()" title="إنهاء">
+                <i class="fas fa-phone-slash"></i>
+            </button>
+            <button class="vc-dock-btn speaker" id="vc-speaker-btn" onclick="vcToggleSpeaker()" title="مكبر صوت">
+                <i class="fas fa-volume-up"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Incoming call toast -->
+    <div id="incoming-call-toast" class="incoming-call-toast">
+        <div class="ict-avatar" id="ict-caller-avatar"><i class="fas fa-user"></i></div>
+        <div class="ict-info">
+            <div class="ict-name" id="ict-caller-name">مكالمة واردة</div>
+            <div class="ict-sub">مكالمة صوتية...</div>
+        </div>
+        <div class="ict-actions">
+            <button class="ict-btn decline" onclick="vcDeclineCall()" title="رفض"><i class="fas fa-phone-slash"></i></button>
+            <button class="ict-btn accept" onclick="vcAcceptCall()" title="قبول"><i class="fas fa-phone"></i></button>
+        </div>
+    </div>
+    <!-- ============ END VOICE CALL ============ -->
 
     <script>
     function toggleAiSendMic(role, value) {
@@ -884,6 +919,5 @@
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
-    <script type="module" src="script_v2_additions.js"></script>
 </body>
 </html>
