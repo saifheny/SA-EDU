@@ -98,16 +98,18 @@ function initKeyboardFix() {
 }
 
 function initSwipeNavigation(portalId) {
-    const portal = document.getElementById(portalId);
-    if (!portal) return;
-    
-    portal.addEventListener('touchstart', (e) => {
+    // Attach on document so swipe works ANYWHERE on screen
+    if (window._swipeInitDone) return;
+    window._swipeInitDone = true;
+    window._swipePortalId = portalId;
+
+    document.addEventListener('touchstart', (e) => {
         _swipeStartX = e.touches[0].clientX;
         _swipeStartY = e.touches[0].clientY;
         _swipeStartTarget = e.target;
     }, { passive: true });
-    
-    portal.addEventListener('touchend', (e) => {
+
+    document.addEventListener('touchend', (e) => {
         if (_swipeStartTarget && (
             _swipeStartTarget.closest('.chat-window') ||
             _swipeStartTarget.closest('.chat-sidebar') ||
@@ -118,23 +120,24 @@ function initSwipeNavigation(portalId) {
             _swipeStartTarget.closest('.vr-room-screen') ||
             _swipeStartTarget.closest('#voice-call-screen')
         )) return;
-        
+
         const dx = e.changedTouches[0].clientX - _swipeStartX;
         const dy = e.changedTouches[0].clientY - _swipeStartY;
-        
-        // More sensitive: 55px and 2:1 ratio
-        if (Math.abs(dx) < 55 || Math.abs(dx) <= Math.abs(dy) * 2) return;
-        
+
+        // Clear horizontal gesture (50px min, must be more horizontal than vertical)
+        if (Math.abs(dx) < 50 || Math.abs(dx) <= Math.abs(dy) * 1.8) return;
+
+        const pid = window._swipePortalId || portalId;
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
         const currentHash = window.location.hash.replace('#', '');
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
-        
+
         // RTL: swipe right = previous tab, swipe left = next tab
         const newIdx = dx < 0 ? idx + 1 : idx - 1;
-        
+
         if (newIdx >= 0 && newIdx < tabs.length) {
-            const navBtns = document.querySelectorAll(`#${portalId} .nav-btn`);
+            const navBtns = document.querySelectorAll(`#${pid} .nav-btn`);
             const direction = dx < 0 ? 'right' : 'left';
             switchTabWithDirection(tabs[newIdx], navBtns[newIdx], direction);
         }
