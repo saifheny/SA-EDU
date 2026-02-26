@@ -133,19 +133,6 @@
         <div class="portal-container">
             <section id="t-library" class="app-section">
                 <div class="mobile-spacer"></div>
-                <!-- Hero Avatar - Teacher -->
-                <div class="section-avatar-hero" id="teacher-hero-section">
-                    <div class="hero-avatar-ring teacher-ring" id="teacher-hero-avatar"><i class="fas fa-user-tie"></i></div>
-                    <div class="hero-info">
-                        <div class="hero-greeting">أهلاً،</div>
-                        <div class="hero-name" id="teacher-hero-name">المعلم</div>
-                        <div class="hero-status"><span class="status-dot"></span> متصل الآن</div>
-                    </div>
-                    <div style="text-align:left;">
-                        <div style="font-size:0.7rem;color:#555;">اختباراتك</div>
-                        <div style="font-size:1.1rem;font-weight:800;color:var(--accent-gold);" id="teacher-exam-count">0</div>
-                    </div>
-                </div>
                 <div class="create-exam-cta" onclick="switchTab('t-create')">
                     <i class="fas fa-file-signature cta-bg-icon"></i>
                     <div class="cta-content">
@@ -363,42 +350,6 @@
         <div class="portal-container">
             <section id="s-exams" class="app-section">
                 <div class="mobile-spacer"></div>
-                <!-- Hero Avatar - Student -->
-                <div class="section-avatar-hero" id="student-hero-section">
-                    <div class="hero-avatar-ring" id="student-hero-avatar"><i class="fas fa-user-astronaut"></i></div>
-                    <div class="hero-info">
-                        <div class="hero-greeting">مرحباً،</div>
-                        <div class="hero-name" id="student-hero-name">الطالب</div>
-                        <div class="hero-status"><span class="status-dot"></span> جاهز للتعلم</div>
-                    </div>
-                    <div style="text-align:left;">
-                        <div style="font-size:0.7rem;color:#555;">نقاطي</div>
-                        <div style="font-size:1.1rem;font-weight:800;color:var(--accent-primary);" id="student-hero-xp">0 XP</div>
-                    </div>
-                </div>
-                <div id="xp-hud" class="xp-hud">
-                    <div class="xp-hud-top">
-                        <div class="xp-level-badge" id="xp-level-badge">
-                            <i class="fas fa-star"></i> <span id="xp-level-name">مبتدئ</span>
-                        </div>
-                        <div class="xp-streak" id="xp-streak-display">
-                            <i class="fas fa-fire" style="color:#f97316;"></i> <span id="xp-streak-count">0</span> يوم
-                        </div>
-                        <div class="xp-total" id="xp-total-display">
-                            <i class="fas fa-bolt" style="color:var(--accent-gold);"></i> <span id="xp-total-count">0</span> XP
-                        </div>
-                    </div>
-                    <div class="xp-daily-goal-wrap">
-                        <div class="xp-daily-goal-label">
-                            <span>هدف اليوم</span>
-                            <span id="xp-daily-label">0 / 50 XP</span>
-                        </div>
-                        <div class="xp-daily-bar">
-                            <div class="xp-daily-fill" id="xp-daily-fill" style="width:0%"></div>
-                        </div>
-                    </div>
-                    <div class="xp-badges-row" id="xp-badges-row"></div>
-                </div>
                 <div class="search-wrap-enhanced">
                     <div class="search-glow"></div>
                     <div class="search-inner" style="position:relative;">
@@ -770,6 +721,7 @@
     <div id="sa-toast-container"></div>
 
     <div id="tab-dots" class="tab-dots hidden"></div>
+    <div class="swipe-progress-bar" id="swipe-progress-bar"></div>
 
     <!-- ============ DIRECT VOICE CALL OVERLAY ============ -->
     <div id="direct-call-overlay">
