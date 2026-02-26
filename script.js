@@ -29,80 +29,6 @@ let reeseImages = [];
 let myUid = null;
 let activeChatRoomId = null;
 
-// =========== DIRECT VOICE CALL SYSTEM ===========
-let _directCallPeer = null;
-let _directCallConn = null;
-let _directCallStream = null;
-let _directCallTimer = null;
-let _directCallSeconds = 0;
-let _directCallMuted = false;
-let _callTargetUid = null;
-let _callTargetName = null;
-let _callTargetIcon = null;
-let _incomingCallData = null;
-
-// =========== ARABIC SPELL CORRECTION MAP ===========
-const ARABIC_CORRECTIONS = {
-    'كيفيه': 'كيفية', 'الاعلام': 'الإعلام', 'السؤل': 'السؤال',
-    'اريد': 'أريد', 'انا': 'أنا', 'اعطني': 'أعطني',
-    'اشرحلي': 'اشرح لي', 'ايه': 'ما هو', 'ازاي': 'كيف',
-    'مش': 'لا', 'عايز': 'أريد', 'ممكن': 'هل يمكن',
-    'الفرق': 'ما الفرق', 'يعني': 'أي', 'بس': 'لكن',
-    'طب': 'إذن', 'احسن': 'أفضل', 'وضحلي': 'وضح لي',
-    'ازى': 'كيف', 'ليه': 'لماذا', 'مستقبلا': 'مستقبلاً',
-    'دائما': 'دائماً', 'ايضا': 'أيضاً', 'اخيرا': 'أخيراً'
-};
-
-function correctArabicSpelling(text) {
-    let corrected = text;
-    Object.entries(ARABIC_CORRECTIONS).forEach(([wrong, right]) => {
-        const regex = new RegExp(wrong, 'g');
-        corrected = corrected.replace(regex, right);
-    });
-    return corrected;
-}
-
-function isComplexQuestion(text) {
-    const complexKeywords = ['اشرح', 'وضح', 'ما الفرق', 'كيف', 'لماذا', 'ما هو', 'تحليل', 'مقارنة', 'سبب', 'نتيجة', 'تفصيل', 'explain', 'why', 'how', 'compare', 'analyze'];
-    const wordCount = text.split(' ').length;
-    return wordCount > 12 || complexKeywords.some(kw => text.includes(kw));
-}
-
-// =========== NATIVE AD DATA ===========
-const NATIVE_ADS = [
-    { icon: '📚', title: 'كورس مجاني في الرياضيات', sub: 'تعلم من أفضل المعلمين مجاناً', cta: 'سجل الآن' },
-    { icon: '🔬', title: 'مختبر العلوم الافتراضي', sub: 'تجارب علمية تفاعلية مذهلة', cta: 'اكتشف' },
-    { icon: '🏆', title: 'مسابقة SA EDU الكبرى', sub: 'اربح جوائز قيمة وشهادات', cta: 'شارك' },
-    { icon: '🎯', title: 'خطة دراسية ذكية', sub: 'AI يصمم لك خطتك الدراسية', cta: 'جرب' },
-    { icon: '📖', title: 'مكتبة المناهج الشاملة', sub: 'آلاف الكتب والشروحات', cta: 'تصفح' }
-];
-let _adIndex = 0;
-
-function createNativeAdCard() {
-    const ad = NATIVE_ADS[_adIndex % NATIVE_ADS.length];
-    _adIndex++;
-    const div = document.createElement('div');
-    div.className = 'native-ad-card';
-    div.innerHTML = `
-        <div class="native-ad-icon">${ad.icon}</div>
-        <div class="native-ad-content">
-            <div class="native-ad-title">${ad.title}</div>
-            <div class="native-ad-sub">${ad.sub}</div>
-        </div>
-        <button class="native-ad-cta">${ad.cta}</button>
-    `;
-    return div;
-}
-
-window.filterExamsBySubject = (subject) => {
-    const input = document.getElementById('t-search');
-    if(input) { input.value = subject; input.dispatchEvent(new Event('input')); }
-};
-window.filterStudentExams = (subject) => {
-    const input = document.getElementById('s-search');
-    if(input) { input.value = subject; input.dispatchEvent(new Event('input')); }
-};
-
 const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai'];
 const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai'];
 let _suppressHistoryPush = false;
@@ -174,42 +100,14 @@ function initKeyboardFix() {
 function initSwipeNavigation(portalId) {
     const portal = document.getElementById(portalId);
     if (!portal) return;
-
+    
     portal.addEventListener('touchstart', (e) => {
         _swipeStartX = e.touches[0].clientX;
         _swipeStartY = e.touches[0].clientY;
         _swipeStartTarget = e.target;
     }, { passive: true });
-
-    portal.addEventListener('touchmove', (e) => {
-        if (_swipeStartTarget && (
-            _swipeStartTarget.closest('.chat-window') ||
-            _swipeStartTarget.closest('.chat-sidebar') ||
-            _swipeStartTarget.closest('input') ||
-            _swipeStartTarget.closest('textarea') ||
-            _swipeStartTarget.closest('.full-screen-overlay') ||
-            _swipeStartTarget.closest('.ai-messages')
-        )) return;
-        const dx = e.touches[0].clientX - _swipeStartX;
-        const dy = e.touches[0].clientY - _swipeStartY;
-        if (Math.abs(dx) < Math.abs(dy) * 1.2) return;
-        const progress = Math.min(Math.abs(dx) / (window.innerWidth * 0.5), 1) * 100;
-        const bar = document.getElementById('swipe-progress-bar');
-        if (bar) { bar.classList.add('active'); bar.style.width = progress + '%'; }
-        const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-        const currentHash = window.location.hash.replace('#', '');
-        const idx = tabs.indexOf(currentHash);
-        updateTabDots(currentHash || tabs[Math.max(idx,0)]);
-        const dotsContainer = document.getElementById('tab-dots');
-        if (dotsContainer) { dotsContainer.classList.remove('hidden'); dotsContainer.classList.add('swipe-visible'); }
-    }, { passive: true });
-
+    
     portal.addEventListener('touchend', (e) => {
-        const bar = document.getElementById('swipe-progress-bar');
-        if (bar) {
-            bar.style.width = '100%';
-            setTimeout(() => { bar.classList.remove('active'); bar.style.width = '0%'; }, 200);
-        }
         if (_swipeStartTarget && (
             _swipeStartTarget.closest('.chat-window') ||
             _swipeStartTarget.closest('.chat-sidebar') ||
@@ -218,14 +116,19 @@ function initSwipeNavigation(portalId) {
             _swipeStartTarget.closest('.full-screen-overlay') ||
             _swipeStartTarget.closest('.ai-messages')
         )) return;
+        
         const dx = e.changedTouches[0].clientX - _swipeStartX;
         const dy = e.changedTouches[0].clientY - _swipeStartY;
+        
         if (Math.abs(dx) < 70 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
+        
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
         const currentHash = window.location.hash.replace('#', '');
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
+        
         const newIdx = dx > 0 ? idx + 1 : idx - 1;
+        
         if (newIdx >= 0 && newIdx < tabs.length) {
             const navBtns = document.querySelectorAll(`#${portalId} .nav-btn`);
             const direction = dx > 0 ? 'left' : 'right';
@@ -236,72 +139,39 @@ function initSwipeNavigation(portalId) {
 
 function switchTabWithDirection(tabId, btn, direction) {
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-    const newSection = document.getElementById(tabId);
-    if (!newSection) return;
-
-    // Get current visible section
-    const currentSection = document.querySelector(`#${portal} .app-section:not(.hidden)`);
-
-    // Determine animation classes based on direction
-    // direction: 'right' means swiping right (going to previous tab = slide in from left)
-    // direction: 'left' means swiping left (going to next tab = slide in from right)
-    const outClass = direction === 'left' ? 'sliding-out-left' : 'sliding-out-right';
-    const inClass  = direction === 'left' ? 'sliding-in-left'  : 'sliding-in-right';
-
-    if (currentSection && currentSection !== newSection) {
-        currentSection.classList.add(outClass);
-        setTimeout(() => {
-            currentSection.classList.remove(outClass);
-        }, 320);
-    }
-
-    // Switch the tab normally (hides current, shows new)
+    const section = document.getElementById(tabId);
+    if (!section) return;
+    
     switchTab(tabId, btn);
-
-    // Apply slide-in to the new section
-    newSection.classList.add(inClass);
+    
+    section.classList.add(direction === 'right' ? 'section-enter' : 'section-enter-left');
     setTimeout(() => {
-        newSection.classList.remove(inClass);
-    }, 320);
-
-    // Show tab dots temporarily
-    updateTabDots(tabId);
-    showTabDotsTemporarily();
+        section.classList.remove('section-enter', 'section-enter-left');
+    }, 300);
 }
-
-let _tabDotsTimer = null;
 
 function updateTabDots(activeTabId) {
     const dotsContainer = document.getElementById('tab-dots');
     if (!dotsContainer) return;
+    
     const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
     dotsContainer.innerHTML = '';
-    tabs.forEach((tab) => {
+    
+    tabs.forEach((tab, idx) => {
         const dot = document.createElement('div');
         dot.className = 'tab-dot' + (tab === activeTabId ? ' active' : '');
         dotsContainer.appendChild(dot);
     });
 }
 
-function showTabDotsTemporarily() {
+function showTabDots() {
     const dotsContainer = document.getElementById('tab-dots');
-    if (!dotsContainer) return;
-    dotsContainer.classList.remove('hidden');
-    dotsContainer.classList.add('swipe-visible');
-    if (_tabDotsTimer) clearTimeout(_tabDotsTimer);
-    _tabDotsTimer = setTimeout(() => {
-        dotsContainer.classList.remove('swipe-visible');
-    }, 2500);
+    if (dotsContainer) dotsContainer.classList.remove('hidden');
 }
 
-function showTabDots() {
-    // Only used internally - don't show permanently, only on swipe
-}
 function hideTabDots() {
     const dotsContainer = document.getElementById('tab-dots');
-    if (dotsContainer) {
-        dotsContainer.classList.remove('swipe-visible');
-    }
+    if (dotsContainer) dotsContainer.classList.add('hidden');
 }
 
 window.addEventListener('click', function(e) {
@@ -468,8 +338,17 @@ window.saConfirm = (msg, onConfirm) => {
 window.closeSaAlert = () => { playSound('click'); document.getElementById('sa-custom-alert').classList.remove('active'); };
 
 function createAdBanner() {
-    // Ads removed
-    return null;
+    const container = document.createElement('div'); container.className = 'ad-banner';
+    const iframe = document.createElement('iframe');
+    iframe.style.width = '468px'; iframe.style.height = '60px'; iframe.style.border = 'none';
+    iframe.style.overflow = 'hidden'; iframe.style.maxWidth = '100%'; 
+    const adContent = `<html><body style="margin:0;padding:0;background:transparent;display:flex;justify-content:center;align-items:center;"><script async>atOptions={'key':'e0f63746bfceb42ce1134aaff1b6709d','format':'iframe','height':60,'width':468,'params':{}};<\/script><script async src="https://www.highperformanceformat.com/e0f63746bfceb42ce1134aaff1b6709d/invoke.js"><\/script></body></html>`;
+    container.appendChild(iframe);
+    setTimeout(() => { 
+        const doc = iframe.contentWindow.document; 
+        doc.open(); doc.write(adContent); doc.close(); 
+    }, 50);
+    return container;
 }
 
 const getBase64 = (file) => new Promise((resolve) => {
@@ -593,7 +472,7 @@ function loginSuccess(name, icon, uid) {
         document.getElementById('student-app').classList.remove('hidden');
         loadStudentExams(); loadStudentGrades(); initStudentReese();
         updateStreakOnLogin();
-        // XP HUD removed
+        setTimeout(() => renderXPHud(), 300);
         setTimeout(() => initSwipeNavigation('student-app'), 500);
     }
     initDardasha();
@@ -606,9 +485,6 @@ function loginSuccess(name, icon, uid) {
     showTabDots();
     const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
     updateTabDots(window.location.hash.replace('#', '') || defaultTab);
-    
-    // Update hero sections
-    setTimeout(updateHeroSections, 300);
 }
 
 function updateOGMeta(title, description, imageUrl) {
@@ -913,7 +789,7 @@ window.switchTab = (tabId, btn) => {
     if(tabId === 's-exams') {
         loadStudentExams();
         startTypewriter("student-type-text", "تحليل المستوى الدراسي");
-        if (selectedRole === 'student') // XP HUD removed
+        if (selectedRole === 'student') setTimeout(() => renderXPHud(), 200);
     }
     if(tabId === 't-library') {
         loadTeacherTests();
@@ -973,7 +849,7 @@ function initDardasha() {
             `;
             list.appendChild(el);
             
-            { const _ad = createAdBanner(); if (_ad) list.appendChild(_ad); }
+            list.appendChild(createAdBanner());
         });
         
         chatEntries.forEach(([chatId, chatInfo]) => {
@@ -1097,9 +973,6 @@ window.openChatRoom = (chatId, name, icon, uid) => {
                 <div id="chat-online-${chatId}" style="font-size:0.7rem;color:#25d366;">متصل</div>
             </div>
             <div style="margin-right:auto;display:flex;gap:10px;">
-                <button class="chat-call-btn" id="chat-call-btn-${chatId}" onclick="startDirectCall('${uid}', '${name}', '${icon}')" title="مكالمة صوتية">
-                    <i class="ph-bold ph-phone"></i>
-                </button>
                 <button class="icon-btn-small" onclick="copyProfileLinkFor('${uid}')" title="نسخ رابط"><i class="ph-bold ph-link"></i></button>
             </div>
         </div>
@@ -1644,7 +1517,7 @@ window.loadReesePosts = (prefix) => {
                     <button class="reese-btn ${isLiked ? 'liked' : ''}" onclick="likeReese('${post.id}', ${post.likes || 0})"><i class="fas ${isLiked ? 'fa-thumbs-up' : 'fa-thumbs-up'}" style="font-size:1.3rem;"></i> <span style="font-size:1.1rem;">${post.likes || 0}</span></button>
                     <button class="reese-btn" onclick="shareReese('${post.id}')"><i class="fas fa-share"></i> مشاركة</button>
                 </div>`;
-            container.appendChild(div); { const _ad = createAdBanner(); if (_ad) container.appendChild(_ad); }
+            container.appendChild(div); container.appendChild(createAdBanner());
         });
         if(visibleCount === 0) container.innerHTML = getEmptyStateHTML('posts');
     });
@@ -1725,31 +1598,27 @@ window.renderAiWelcome = (prefix) => {
     let roleDesc = '';
 
     if (selectedRole === 'teacher') {
-        roleDesc = 'إنشاء اختبارات، تحضير دروس، وإدارة طلابك بذكاء.';
+        roleDesc = 'يمكنني مساعدتك في إنشاء الاختبارات، تحضير الدروس، وإدارة الطلاب.';
         roleSpecificChips = `
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'أنشئ اختبار عن الكيمياء العضوية')"><i class="fas fa-flask"></i><span>إنشاء اختبار</span></div>
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'اكتب خطة درس متكاملة عن التاريخ الحديث')"><i class="fas fa-book"></i><span>تحضير درس</span></div>
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'كيف أجعل الحصة تفاعلية أكثر؟')"><i class="fas fa-users"></i><span>تفاعل الطلاب</span></div>
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'اقترح لي أساليب تقييم مبتكرة')"><i class="fas fa-chart-bar"></i><span>أساليب تقييم</span></div>
+            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'أنشئ اختبار عن الكيمياء العضوية')"><i class="fas fa-flask"></i> إنشاء اختبار</div>
+            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'اكتب خطة درس عن التاريخ الحديث')"><i class="fas fa-book"></i> تحضير درس</div>
+            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'كيف أجعل الحصة تفاعلية أكثر؟')"><i class="fas fa-users"></i> نصائح تفاعلية</div>
         `;
     } else {
-        roleDesc = 'شرح دروس، حل مسائل، وتلخيص المواد الدراسية.';
+        roleDesc = 'أنا هنا لمساعدتك في المذاكرة، شرح الدروس، وحل المسائل الصعبة.';
         roleSpecificChips = `
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'اشرح لي قانون نيوتن الثاني ببساطة')"><i class="fas fa-atom"></i><span>شرح درس</span></div>
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'لخص لي أحداث الحرب العالمية الأولى')"><i class="fas fa-history"></i><span>تلخيص</span></div>
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'ساعدني في تنظيم وقت المذاكرة')"><i class="fas fa-clock"></i><span>تنظيم الوقت</span></div>
-            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'ما الفرق بين الخلية الحيوانية والنباتية؟')"><i class="fas fa-dna"></i><span>مقارنة علمية</span></div>
+            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'اشرح لي قانون نيوتن الثاني ببساطة')"><i class="fas fa-atom"></i> شرح درس</div>
+            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'لخص لي أحداث الحرب العالمية الأولى')"><i class="fas fa-history"></i> تلخيص</div>
+            <div class="ai-chip" onclick="fillAiInput('${prefix}', 'ساعدني في تنظيم وقت المذاكرة')"><i class="fas fa-clock"></i> تنظيم الوقت</div>
         `;
     }
 
     msgs.innerHTML = `
         <div class="ai-welcome-screen">
-            <div class="ai-avatar-gemini">
-                <div class="ai-avatar-gemini-inner"><i class="fas fa-wand-magic-sparkles"></i></div>
-            </div>
+            <div class="ai-logo-large"><i class="fas fa-wand-magic-sparkles"></i></div>
             <h3 class="ai-welcome-title">مرحباً ${firstName} 👋</h3>
-            <p class="ai-welcome-text">أنا <strong>SA AI</strong> — مساعدك الذكي.<br>${roleDesc}</p>
-            <div class="ai-welcome-chips-grid">
+            <p class="ai-welcome-text">أنا مساعدك الذكي SA AI. <br>${roleDesc}</p>
+            <div class="ai-chips">
                 ${roleSpecificChips}
             </div>
         </div>`;
@@ -1881,14 +1750,6 @@ function renderMessageUI(prefix, role, text, imgB64) {
     const wrap = document.createElement('div');
     wrap.className = `chat-msg-wrap ${role}`;
 
-    // Add AI avatar for AI messages
-    if (role === 'ai') {
-        const avatar = document.createElement('div');
-        avatar.className = 'ai-msg-avatar';
-        avatar.innerHTML = '<i class="fas fa-wand-magic-sparkles" style="font-size:0.75rem;"></i>';
-        wrap.appendChild(avatar);
-    }
-
     const div = document.createElement('div');
     div.className = `chat-msg ${role}`;
 
@@ -1958,7 +1819,7 @@ function loadTeacherTests() {
                             <button class="action-icon delete" onclick="deleteTest('${key}')" title="حذف"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>`;
-                list.appendChild(cardWrapper); { const _ad = createAdBanner(); if (_ad) list.appendChild(_ad); }
+                list.appendChild(cardWrapper); list.appendChild(createAdBanner());
             }
         });
         if(count === 0) list.innerHTML = getEmptyStateHTML('exams');
@@ -2253,7 +2114,7 @@ function loadStudentExams() {
                     </div>
                     <div class="icon-actions">${buttonsHtml}</div>
                 </div>`;
-            list.appendChild(cardWrapper); { const _ad = createAdBanner(); if (_ad) list.appendChild(_ad); }
+            list.appendChild(cardWrapper); list.appendChild(createAdBanner());
         });
         if(!foundExam) list.innerHTML = getEmptyStateHTML('exams');
     });
@@ -2548,50 +2409,25 @@ window.sendAiMsg = async (prefix) => {
     
     const loadId = 'loading-' + Date.now();
     const loaderDiv = document.createElement('div');
-    loaderDiv.className = 'chat-msg-wrap ai';
-    loaderDiv.id = loadId;
-    
-    const isComplex = isComplexQuestion(txt);
-    const thinkingLabel = isComplex ? 
-        '<span class="thinking-label deep"><i class="fas fa-brain" style="color:#d946ef;font-size:0.75rem;"></i> يفكر بعمق...</span>' :
-        '<span class="thinking-label">يفكر...</span>';
-    
-    loaderDiv.innerHTML = `
-        <div class="ai-msg-avatar" style="margin-bottom:2px;"><i class="fas fa-wand-magic-sparkles" style="font-size:0.75rem;"></i></div>
-        <div class="gemini-thinking">
-            <div class="thinking-orbit">
-                <div class="thinking-orbit-ring"></div>
-                <div class="thinking-orbit-ring2"></div>
-                <div class="thinking-center-dot"></div>
-            </div>
-            <div class="thinking-dots">
-                ${thinkingLabel}
-                <div class="thinking-pulse-dots">
-                    <span></span><span></span><span></span>
-                    <div class="thinking-caret"></div>
-                </div>
-            </div>
-        </div>
-    `;
+    loaderDiv.className = 'chat-msg ai'; 
+    loaderDiv.id = loadId; 
+    loaderDiv.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
     msgs.appendChild(loaderDiv); 
     msgs.scrollTop = msgs.scrollHeight;
     
     try {
         let finalPrompt = "";
         
-        // Correct Arabic spelling before sending
-        const correctedTxt = correctArabicSpelling(txt);
-        
         if(selectedRole === 'student') {
-            finalPrompt += `أنت مساعد دراسي ذكي اسمه SA AI للطلاب. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة والتحيات تحتاج ردود قصيرة (جملة أو اثنتان)، الأسئلة التفسيرية تحتاج شرح متوسط، والأسئلة المعقدة تحتاج إجابة مفصلة. لا تطول إذا السؤال لا يحتاج لذلك. إذا وجدت أخطاء إملائية في السؤال افهمها وأجب عنها بشكل طبيعي دون التنبيه. `;
+            finalPrompt += `أنت مساعد دراسي ذكي اسمه SA AI للطلاب. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة والتحيات تحتاج ردود قصيرة (جملة أو اثنتان)، الأسئلة التفسيرية تحتاج شرح متوسط، والأسئلة المعقدة تحتاج إجابة مفصلة. لا تطول إذا السؤال لا يحتاج لذلك. `;
         } else {
-            finalPrompt += `أنت مساعد معلمين ذكي اسمه SA AI. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة ردود قصيرة، والأسئلة التفصيلية ردود شاملة. إذا وجدت أخطاء إملائية في السؤال افهمها وأجب عنها بشكل طبيعي. `;
+            finalPrompt += `أنت مساعد معلمين ذكي اسمه SA AI. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة ردود قصيرة، والأسئلة التفصيلية ردود شاملة. `;
         }
 
         if (ocrText) {
             finalPrompt += `Context from image: "${ocrText}". `;
         }
-        finalPrompt += correctedTxt;
+        finalPrompt += txt;
         
         const reply = await callPollinationsAI(finalPrompt);
         
@@ -2601,10 +2437,7 @@ window.sendAiMsg = async (prefix) => {
         renderMessageUI(prefix, 'ai', reply, null); 
         saveChatToLocal();
     } catch (e) { 
-        document.getElementById(loadId).innerHTML = `
-            <div class="ai-msg-avatar"><i class="fas fa-exclamation" style="font-size:0.7rem;color:#ef4444;"></i></div>
-            <div class="chat-msg ai" style="color:#ef4444;">حدث خطأ في الاتصال بالذكاء الاصطناعي.</div>
-        `; 
+        document.getElementById(loadId).innerText = "حدث خطأ في الاتصال بالذكاء الاصطناعي."; 
         console.error(e);
     }
 };
@@ -3096,309 +2929,4 @@ if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./service-worker.js');
     });
-}
-
-// ======================================================
-// SA EDU — DIRECT VOICE CALL SYSTEM (PeerJS-based)
-// ======================================================
-
-let _dcPeer = null;
-let _dcLocalStream = null;
-let _dcRemoteConn = null;
-let _dcCallTimer = null;
-let _dcSeconds = 0;
-let _dcMuted = false;
-let _dcActiveCallId = null;
-let _dcCallerData = null;
-
-function getDCPeer() {
-    if (_dcPeer && !_dcPeer.destroyed) return _dcPeer;
-    const peerId = 'sa-edu-' + myUid;
-    _dcPeer = new Peer(peerId, {
-        debug: 0,
-        config: {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
-        }
-    });
-    _dcPeer.on('call', (incomingCall) => {
-        // Incoming call notification via Firebase
-        // incomingCall.metadata has caller info
-        const meta = incomingCall.metadata || {};
-        showIncomingCallNotification(meta.callerName || '...', meta.callerIcon || 'fa-user', incomingCall);
-    });
-    _dcPeer.on('error', (err) => { console.error('PeerJS error:', err); });
-    return _dcPeer;
-}
-
-window.startDirectCall = async (targetUid, targetName, targetIcon) => {
-    if (!targetUid || targetUid === myUid) return;
-    _callTargetUid = targetUid;
-    _callTargetName = targetName;
-    _callTargetIcon = targetIcon || 'fa-user';
-    
-    try {
-        _dcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-    } catch(e) {
-        saAlert('يرجى السماح بالوصول للمايكروفون.', 'error');
-        return;
-    }
-    
-    const peer = getDCPeer();
-    const targetPeerId = 'sa-edu-' + targetUid;
-    
-    // Notify target via Firebase signaling
-    const callSignalRef = ref(db, `call_signals/${targetUid}`);
-    await set(callSignalRef, {
-        callerUid: myUid,
-        callerName: currentUser,
-        callerIcon: localStorage.getItem('sa_icon') || 'fa-user-astronaut',
-        callerPeerId: peer.id,
-        timestamp: Date.now()
-    });
-    
-    // Show calling UI
-    showCallOverlay(targetName, targetIcon, 'calling');
-    
-    // Actually call via PeerJS
-    try {
-        _dcRemoteConn = peer.call(targetPeerId, _dcLocalStream, {
-            metadata: { callerName: currentUser, callerIcon: localStorage.getItem('sa_icon') || 'fa-user-astronaut' }
-        });
-        
-        if (_dcRemoteConn) {
-            _dcRemoteConn.on('stream', (remoteStream) => {
-                const audio = document.getElementById('direct-call-remote-audio');
-                if (audio) { audio.srcObject = remoteStream; }
-                onCallConnected();
-            });
-            _dcRemoteConn.on('close', () => { endDirectCall(); });
-            _dcRemoteConn.on('error', (e) => { console.error(e); endDirectCall(); });
-        }
-    } catch(e) { 
-        console.error(e);
-        saAlert('تعذر بدء المكالمة.', 'error');
-        endDirectCall();
-    }
-    
-    // Auto-cancel after 30s if not answered
-    setTimeout(() => {
-        if (_dcRemoteConn && !_dcRemoteConn.open) { endDirectCall(); }
-    }, 30000);
-};
-
-function showIncomingCallNotification(callerName, callerIcon, incomingCall) {
-    _dcCallerData = incomingCall;
-    
-    // Show toast notification
-    const toast = document.getElementById('call-toast-banner');
-    const toastAvatar = document.getElementById('call-toast-avatar');
-    const toastName = document.getElementById('call-toast-name');
-    if (toast) {
-        toastAvatar.innerHTML = `<i class="fas ${callerIcon}"></i>`;
-        toastName.textContent = callerName;
-        toast.classList.add('show');
-    }
-    
-    // Also show overlay
-    showCallOverlay(callerName, callerIcon, 'incoming');
-    
-    // Auto-reject after 25s
-    setTimeout(() => {
-        if (_dcCallerData) { 
-            toast?.classList.remove('show');
-            hideCallOverlay();
-        }
-    }, 25000);
-}
-
-function showCallOverlay(name, icon, mode) {
-    const overlay = document.getElementById('direct-call-overlay');
-    const avatarEl = document.getElementById('call-overlay-avatar');
-    const nameEl = document.getElementById('call-overlay-name');
-    const statusEl = document.getElementById('call-overlay-status');
-    const acceptBtn = document.getElementById('call-accept-btn');
-    const muteRow = document.getElementById('call-mute-row');
-    
-    if (!overlay) return;
-    if (avatarEl) avatarEl.innerHTML = `<i class="fas ${icon}"></i>`;
-    if (nameEl) nameEl.textContent = name;
-    
-    if (mode === 'calling') {
-        if (statusEl) statusEl.textContent = 'جاري الاتصال...';
-        if (acceptBtn) acceptBtn.style.display = 'none';
-        if (muteRow) muteRow.style.display = 'none';
-    } else if (mode === 'incoming') {
-        if (statusEl) statusEl.textContent = 'مكالمة واردة...';
-        if (acceptBtn) acceptBtn.style.display = 'flex';
-        if (muteRow) muteRow.style.display = 'none';
-    }
-    
-    overlay.classList.add('show');
-    overlay.classList.remove('in-call');
-}
-
-function hideCallOverlay() {
-    const overlay = document.getElementById('direct-call-overlay');
-    if (overlay) overlay.classList.remove('show', 'in-call');
-}
-
-function onCallConnected() {
-    const overlay = document.getElementById('direct-call-overlay');
-    const statusEl = document.getElementById('call-overlay-status');
-    const muteRow = document.getElementById('call-mute-row');
-    
-    if (overlay) overlay.classList.add('in-call');
-    if (statusEl) statusEl.textContent = 'متصل';
-    if (muteRow) muteRow.style.display = 'flex';
-    
-    // Hide toast
-    document.getElementById('call-toast-banner')?.classList.remove('show');
-    
-    // Start timer
-    _dcSeconds = 0;
-    _dcCallTimer = setInterval(() => {
-        _dcSeconds++;
-        const m = Math.floor(_dcSeconds / 60);
-        const s = _dcSeconds % 60;
-        const timerEl = document.getElementById('call-duration-timer');
-        if (timerEl) timerEl.textContent = `${m}:${s.toString().padStart(2,'0')}`;
-    }, 1000);
-}
-
-window.acceptDirectCall = async () => {
-    document.getElementById('call-toast-banner')?.classList.remove('show');
-    
-    if (_dcCallerData) {
-        // Incoming call from PeerJS
-        try {
-            _dcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            _dcCallerData.answer(_dcLocalStream);
-            _dcRemoteConn = _dcCallerData;
-            _dcCallerData = null;
-            
-            _dcRemoteConn.on('stream', (remoteStream) => {
-                const audio = document.getElementById('direct-call-remote-audio');
-                if (audio) { audio.srcObject = remoteStream; }
-                onCallConnected();
-            });
-            _dcRemoteConn.on('close', () => { endDirectCall(); });
-        } catch(e) {
-            saAlert('يرجى السماح بالوصول للمايكروفون.', 'error');
-            hideCallOverlay();
-        }
-    }
-};
-
-window.rejectOrEndDirectCall = () => {
-    document.getElementById('call-toast-banner')?.classList.remove('show');
-    _dcCallerData = null;
-    endDirectCall();
-};
-
-function endDirectCall() {
-    if (_dcCallTimer) { clearInterval(_dcCallTimer); _dcCallTimer = null; }
-    if (_dcRemoteConn) { try { _dcRemoteConn.close(); } catch(e) {} _dcRemoteConn = null; }
-    if (_dcLocalStream) { _dcLocalStream.getTracks().forEach(t => t.stop()); _dcLocalStream = null; }
-    const audio = document.getElementById('direct-call-remote-audio');
-    if (audio) { audio.srcObject = null; }
-    hideCallOverlay();
-    _dcCallerData = null;
-    _dcSeconds = 0;
-}
-
-window.toggleCallMute = () => {
-    _dcMuted = !_dcMuted;
-    if (_dcLocalStream) {
-        _dcLocalStream.getAudioTracks().forEach(t => { t.enabled = !_dcMuted; });
-    }
-    const btn = document.getElementById('call-mute-btn');
-    if (btn) {
-        btn.classList.toggle('active', _dcMuted);
-        btn.innerHTML = _dcMuted ? '<i class="ph-bold ph-microphone-slash"></i>' : '<i class="ph-bold ph-microphone"></i>';
-    }
-};
-
-window.toggleCallSpeaker = () => {
-    const btn = document.getElementById('call-speaker-btn');
-    if (btn) btn.classList.toggle('active');
-};
-
-// Listen for incoming call signals via Firebase
-function listenForCallSignals() {
-    if (!myUid) return;
-    const signalRef = ref(db, `call_signals/${myUid}`);
-    onValue(signalRef, async (snap) => {
-        if (!snap.exists()) return;
-        const data = snap.val();
-        // Only process recent signals (within 30s)
-        if (Date.now() - data.timestamp > 30000) { await remove(signalRef); return; }
-        
-        // Show incoming call notification
-        showIncomingCallNotification(data.callerName, data.callerIcon, null);
-        
-        // Wait for PeerJS incoming call event
-        // Clean signal
-        await remove(signalRef);
-    });
-}
-
-// Attach call signal listener after login
-const _origLoginSuccess = loginSuccess;
-// We can't easily override loginSuccess, so we'll call it in the existing listener.
-// Add to initVoiceModule callback or after initialization:
-
-// Watch for Firebase call signals
-const _watchCallsInterval = setInterval(() => {
-    if (myUid && db) {
-        listenForCallSignals();
-        clearInterval(_watchCallsInterval);
-    }
-}, 1000);
-
-
-// ======================================================
-// SA EDU — HERO SECTION UPDATES
-// ======================================================
-
-function updateHeroSections() {
-    const icon = localStorage.getItem('sa_icon') || 'fa-user-astronaut';
-    
-    if (selectedRole === 'teacher') {
-        const heroAvatar = document.getElementById('teacher-hero-avatar');
-        const heroName = document.getElementById('teacher-hero-name');
-        if (heroAvatar) { 
-            heroAvatar.innerHTML = `<i class="fas ${icon}"></i>`;
-            heroAvatar.style.color = 'var(--accent-gold)';
-            heroAvatar.style.borderColor = 'var(--accent-gold)';
-        }
-        if (heroName) heroName.textContent = currentUser?.split(' ')[0] || 'المعلم';
-    } else {
-        const heroAvatar = document.getElementById('student-hero-avatar');
-        const heroName = document.getElementById('student-hero-name');
-        if (heroAvatar) {
-            heroAvatar.innerHTML = `<i class="fas ${icon}"></i>`;
-        }
-        if (heroName) heroName.textContent = currentUser?.split(' ')[0] || 'الطالب';
-    }
-}
-
-// Update heroes when tab switches
-const _origSwitchTab = window.switchTab;
-window.switchTab = (tabId, btn) => {
-    _origSwitchTab(tabId, btn);
-    setTimeout(updateHeroSections, 100);
-    setTimeout(() => {
-        const xpCount = document.getElementById('xp-total-count');
-        const heroXp = document.getElementById('student-hero-xp');
-        if (xpCount && heroXp) heroXp.textContent = xpCount.textContent + ' XP';
-    }, 500);
-};
-
-// Update exam count for teacher hero
-function updateTeacherExamCount(count) {
-    const el = document.getElementById('teacher-exam-count');
-    if (el) el.textContent = count;
 }
