@@ -3122,10 +3122,24 @@ animation: shakeField 0.4s ease;
    Gemini-Like AI, Avatars, Animations, Voice Calls, Smart Ads
    ============================================================ */
 
-/* ---- TAB DOTS IMPROVED ---- */
+/* ============================================================
+   SA EDU — PATCH v3.1 — Refined UX
+   ============================================================ */
+
+/* ---- HIDE XP HUD completely ---- */
+#xp-hud { display: none !important; }
+#xp-reward-modal, #leaderboard-modal { display: none !important; }
+
+/* ---- HIDE NATIVE ADS completely ---- */
+.native-ad-card, .ad-banner { display: none !important; }
+
+/* ---- HIDE HERO SECTIONS ---- */
+.section-avatar-hero { display: none !important; }
+
+/* ---- TAB DOTS — only show during swipe ---- */
 .tab-dots {
     position: fixed;
-    bottom: 8px;
+    bottom: 10px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -3134,9 +3148,14 @@ animation: shakeField 0.4s ease;
     z-index: 2999;
     pointer-events: none;
     padding: 4px 10px;
-    background: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.5);
     border-radius: 20px;
     backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+.tab-dots.swipe-visible {
+    opacity: 1;
 }
 .tab-dot {
     width: 5px;
@@ -3151,6 +3170,82 @@ animation: shakeField 0.4s ease;
     background: var(--accent-primary);
     box-shadow: 0 0 8px var(--accent-glow);
 }
+
+/* ---- MOBILE BOTTOM SAFE AREA ---- */
+@media (max-width: 768px) {
+    .portal-container {
+        padding-bottom: calc(var(--nav-height) + 40px);
+    }
+    .nav-container {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .top-nav {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    /* Extra chin at bottom so content never hides behind nav */
+    body::after {
+        content: '';
+        display: block;
+        height: env(safe-area-inset-bottom, 20px);
+        min-height: 20px;
+    }
+}
+
+/* ---- FACEBOOK-STYLE HORIZONTAL SLIDE ---- */
+.portal-container {
+    position: relative;
+    overflow: hidden;
+}
+
+/* Sections use absolute positioning during swipe for Facebook-like slide */
+.app-section.sliding-out-right {
+    animation: slideOutRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.app-section.sliding-out-left {
+    animation: slideOutLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.app-section.sliding-in-right {
+    animation: slideInRight 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.app-section.sliding-in-left {
+    animation: slideInLeft 0.32s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes slideOutRight {
+    from { transform: translateX(0); opacity: 1; }
+    to   { transform: translateX(60px); opacity: 0; }
+}
+@keyframes slideOutLeft {
+    from { transform: translateX(0); opacity: 1; }
+    to   { transform: translateX(-60px); opacity: 0; }
+}
+@keyframes slideInRight {
+    from { transform: translateX(-60px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+}
+@keyframes slideInLeft {
+    from { transform: translateX(60px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+}
+
+/* ---- SWIPE PROGRESS BAR (Facebook-like) ---- */
+.swipe-progress-bar {
+    position: fixed;
+    top: var(--nav-height);
+    left: 0;
+    height: 2px;
+    background: var(--accent-primary);
+    z-index: 3001;
+    width: 0%;
+    opacity: 0;
+    transition: width 0.15s ease, opacity 0.2s;
+    border-radius: 0 2px 2px 0;
+    box-shadow: 0 0 6px var(--accent-glow);
+}
+.swipe-progress-bar.active {
+    opacity: 1;
+}
+
 
 /* ---- GEMINI-LIKE AI THINKING ANIMATION ---- */
 .gemini-thinking {
