@@ -16,24 +16,6 @@ const db = getDatabase(app);
 
 let selectedRole = 'student'; 
 let currentUser = null;
-
-// ── DEEPLINK: Save URL params before login so they survive auth ──────────────
-(function savePendingDeepLink() {
-    const params = new URLSearchParams(window.location.search);
-    const hasLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
-    if (hasLink) {
-        localStorage.setItem('sa_pending_deeplink', window.location.search);
-        // Show a banner so user knows something is waiting
-        const banner = document.createElement('div');
-        banner.className = 'pending-link-banner';
-        banner.innerHTML = '<i class="fas fa-link"></i> سجّل دخولك لفتح الرابط المشارك';
-        banner.id = 'pending-link-banner';
-        document.body.appendChild(banner);
-        // Remove params from URL bar (cleaner look), keep hash
-        const cleanUrl = window.location.pathname + window.location.hash;
-        window.history.replaceState({}, document.title, cleanUrl);
-    }
-})();
 let currentQuestions = [];
 let currentImgBase64 = null;
 let aiGenImgBase64 = null;
@@ -47,6 +29,80 @@ let reeseImages = [];
 let myUid = null;
 let activeChatRoomId = null;
 
+// =========== DIRECT VOICE CALL SYSTEM ===========
+let _directCallPeer = null;
+let _directCallConn = null;
+let _directCallStream = null;
+let _directCallTimer = null;
+let _directCallSeconds = 0;
+let _directCallMuted = false;
+let _callTargetUid = null;
+let _callTargetName = null;
+let _callTargetIcon = null;
+let _incomingCallData = null;
+
+// =========== ARABIC SPELL CORRECTION MAP ===========
+const ARABIC_CORRECTIONS = {
+    'كيفيه': 'كيفية', 'الاعلام': 'الإعلام', 'السؤل': 'السؤال',
+    'اريد': 'أريد', 'انا': 'أنا', 'اعطني': 'أعطني',
+    'اشرحلي': 'اشرح لي', 'ايه': 'ما هو', 'ازاي': 'كيف',
+    'مش': 'لا', 'عايز': 'أريد', 'ممكن': 'هل يمكن',
+    'الفرق': 'ما الفرق', 'يعني': 'أي', 'بس': 'لكن',
+    'طب': 'إذن', 'احسن': 'أفضل', 'وضحلي': 'وضح لي',
+    'ازى': 'كيف', 'ليه': 'لماذا', 'مستقبلا': 'مستقبلاً',
+    'دائما': 'دائماً', 'ايضا': 'أيضاً', 'اخيرا': 'أخيراً'
+};
+
+function correctArabicSpelling(text) {
+    let corrected = text;
+    Object.entries(ARABIC_CORRECTIONS).forEach(([wrong, right]) => {
+        const regex = new RegExp(wrong, 'g');
+        corrected = corrected.replace(regex, right);
+    });
+    return corrected;
+}
+
+function isComplexQuestion(text) {
+    const complexKeywords = ['اشرح', 'وضح', 'ما الفرق', 'كيف', 'لماذا', 'ما هو', 'تحليل', 'مقارنة', 'سبب', 'نتيجة', 'تفصيل', 'explain', 'why', 'how', 'compare', 'analyze'];
+    const wordCount = text.split(' ').length;
+    return wordCount > 12 || complexKeywords.some(kw => text.includes(kw));
+}
+
+// =========== NATIVE AD DATA ===========
+const NATIVE_ADS = [
+    { icon: '📚', title: 'كورس مجاني في الرياضيات', sub: 'تعلم من أفضل المعلمين مجاناً', cta: 'سجل الآن' },
+    { icon: '🔬', title: 'مختبر العلوم الافتراضي', sub: 'تجارب علمية تفاعلية مذهلة', cta: 'اكتشف' },
+    { icon: '🏆', title: 'مسابقة SA EDU الكبرى', sub: 'اربح جوائز قيمة وشهادات', cta: 'شارك' },
+    { icon: '🎯', title: 'خطة دراسية ذكية', sub: 'AI يصمم لك خطتك الدراسية', cta: 'جرب' },
+    { icon: '📖', title: 'مكتبة المناهج الشاملة', sub: 'آلاف الكتب والشروحات', cta: 'تصفح' }
+];
+let _adIndex = 0;
+
+function createNativeAdCard() {
+    const ad = NATIVE_ADS[_adIndex % NATIVE_ADS.length];
+    _adIndex++;
+    const div = document.createElement('div');
+    div.className = 'native-ad-card';
+    div.innerHTML = `
+        <div class="native-ad-icon">${ad.icon}</div>
+        <div class="native-ad-content">
+            <div class="native-ad-title">${ad.title}</div>
+            <div class="native-ad-sub">${ad.sub}</div>
+        </div>
+        <button class="native-ad-cta">${ad.cta}</button>
+    `;
+    return div;
+}
+
+window.filterExamsBySubject = (subject) => {
+    const input = document.getElementById('t-search');
+    if(input) { input.value = subject; input.dispatchEvent(new Event('input')); }
+};
+window.filterStudentExams = (subject) => {
+    const input = document.getElementById('s-search');
+    if(input) { input.value = subject; input.dispatchEvent(new Event('input')); }
+};
+
 const TEACHER_TABS = ['t-library', 't-reese', 't-dardasha', 't-ai'];
 const STUDENT_TABS = ['s-exams', 's-reese', 's-dardasha', 's-ai'];
 let _suppressHistoryPush = false;
@@ -56,23 +112,15 @@ let _swipeStartY = 0;
 let _swipeStartTarget = null;
 
 let lastScrollTop = 0;
-function handleNavScroll(st) {
-    const nav = document.querySelector('.top-nav');
-    if (!nav) return;
-    if (st > lastScrollTop && st > 60) {
-        nav.classList.add('nav-hidden');
-    } else if (st < lastScrollTop - 5) {
-        nav.classList.remove('nav-hidden');
+window.addEventListener("scroll", function() {
+    let st = window.pageYOffset || document.documentElement.scrollTop;
+    if (st > lastScrollTop && st > 10){
+        document.querySelector('.top-nav').classList.add('nav-hidden');
+    } else {
+        document.querySelector('.top-nav').classList.remove('nav-hidden');
     }
     lastScrollTop = st <= 0 ? 0 : st;
-}
-window.addEventListener('scroll', () => handleNavScroll(window.pageYOffset || document.documentElement.scrollTop), { passive: true });
-document.addEventListener('scroll', (e) => {
-    const t = e.target;
-    if (t && t.nodeType === 1 && t.classList && (t.classList.contains('app-section') || t.classList.contains('chat-msgs-area') || t.classList.contains('feed-container'))) {
-        handleNavScroll(t.scrollTop);
-    }
-}, true);
+}, false);
 
 window.addEventListener('popstate', (e) => {
     if (!currentUser) return;
@@ -124,39 +172,56 @@ function initKeyboardFix() {
 }
 
 function initSwipeNavigation(portalId) {
-    let startX = 0, startY = 0, startTarget = null, startTime = 0;
-    const THRESHOLD = 40;
-
-    document.addEventListener('touchstart', (e) => {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        startTarget = e.target;
-        startTime = Date.now();
+    const portal = document.getElementById(portalId);
+    if (!portal) return;
+    
+    portal.addEventListener('touchstart', (e) => {
+        _swipeStartX = e.touches[0].clientX;
+        _swipeStartY = e.touches[0].clientY;
+        _swipeStartTarget = e.target;
     }, { passive: true });
-
-    document.addEventListener('touchend', (e) => {
-        if (document.getElementById('call-ui') || document.getElementById('voice-room-screen')?.classList.contains('open')) return;
-        if (startTarget?.closest('input,textarea,.msg-ctx-menu,.vr-panel,#voice-audio-gate,#ai-history-sidebar')) return;
-
-        const dx = e.changedTouches[0].clientX - startX;
-        const dy = e.changedTouches[0].clientY - startY;
-        const dt = Date.now() - startTime;
-
-        if (Math.abs(dx) < THRESHOLD || Math.abs(dy) > Math.abs(dx) * 1.2 || dt > 800) return;
-
+    
+    portal.addEventListener('touchend', (e) => {
+        if (_swipeStartTarget && (
+            _swipeStartTarget.closest('.chat-window') ||
+            _swipeStartTarget.closest('.chat-sidebar') ||
+            _swipeStartTarget.closest('input') ||
+            _swipeStartTarget.closest('textarea') ||
+            _swipeStartTarget.closest('.full-screen-overlay') ||
+            _swipeStartTarget.closest('.ai-messages')
+        )) return;
+        
+        const dx = e.changedTouches[0].clientX - _swipeStartX;
+        const dy = e.changedTouches[0].clientY - _swipeStartY;
+        
+        if (Math.abs(dx) < 70 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
+        
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-        const currentHash = window.location.hash.replace('#','');
+        const currentHash = window.location.hash.replace('#', '');
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
-
-        // RTL: swipe right (dx > 0) goes to next tab (higher index), swipe left goes back
+        
         const newIdx = dx > 0 ? idx + 1 : idx - 1;
-        if (newIdx < 0 || newIdx >= tabs.length) return;
-
-        const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-        const navBtns = document.querySelectorAll(`#${portal} .nav-btn`);
-        switchTab(tabs[newIdx], navBtns[newIdx]);
+        
+        if (newIdx >= 0 && newIdx < tabs.length) {
+            const navBtns = document.querySelectorAll(`#${portalId} .nav-btn`);
+            const direction = dx > 0 ? 'left' : 'right';
+            switchTabWithDirection(tabs[newIdx], navBtns[newIdx], direction);
+        }
     }, { passive: true });
+}
+
+function switchTabWithDirection(tabId, btn, direction) {
+    const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
+    const section = document.getElementById(tabId);
+    if (!section) return;
+    
+    switchTab(tabId, btn);
+    
+    section.classList.add(direction === 'right' ? 'section-enter' : 'section-enter-left');
+    setTimeout(() => {
+        section.classList.remove('section-enter', 'section-enter-left');
+    }, 300);
 }
 
 function updateTabDots(activeTabId) {
@@ -293,42 +358,14 @@ function getMultipleSkeletons(count = 3) {
 }
 
 function getEmptyStateHTML(type) {
-    const states = {
-        posts: {
-            icon: 'fas fa-pen-to-square',
-            title: 'لا توجد منشورات',
-            desc: 'كن أول من يشارك أفكاره',
-        },
-        exams: {
-            icon: 'fas fa-file-lines',
-            title: 'لا توجد اختبارات',
-            desc: 'لا يوجد اختبارات متاحة الآن',
-        },
-        chats: {
-            icon: 'fas fa-message',
-            title: 'لا توجد محادثات',
-            desc: 'ابدأ محادثة مع أي شخص',
-            action: `<button class="empty-action-btn" onclick="toggleUserSearchModal()"><i class="fas fa-plus"></i> محادثة جديدة</button>`
-        },
-        results: {
-            icon: 'fas fa-chart-simple',
-            title: 'لا توجد نتائج',
-            desc: 'لم يؤدِ أي طالب هذا الاختبار بعد',
-        },
-        history: {
-            icon: 'fas fa-clock-rotate-left',
-            title: 'لا يوجد سجل',
-            desc: 'ستظهر محادثاتك هنا',
-        },
-    };
-    const s = states[type] || { icon: 'fas fa-inbox', title: 'لا يوجد محتوى', desc: '' };
-    return `
-        <div class="empty-state-container">
-            <div class="empty-avatar"><i class="${s.icon}"></i></div>
-            <h3>${s.title}</h3>
-            <p>${s.desc}</p>
-            ${s.action || ''}
-        </div>`;
+    if(type === 'posts') {
+        return `<div class="empty-state-container"><div class="empty-avatar"><i class="fas fa-box-open" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد منشورات حالياً</h3><p style="color:#555; font-size:0.9rem;">كن أول من يشارك أفكاره!</p></div>`;
+    } else if (type === 'exams') {
+        return `<div class="empty-state-container"><div class="empty-avatar"><i class="fas fa-folder-open" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد اختبارات</h3><p style="color:#555; font-size:0.9rem;">استمتع بوقتك، لا يوجد ضغط الآن.</p></div>`;
+    } else if (type === 'chats') {
+        return `<div class="empty-state-container"><div class="empty-avatar"><i class="fab fa-telegram-plane" style="color:#666;"></i></div><h3 style="color:#888;">لا توجد محادثات</h3><p style="color:#555; font-size:0.9rem;">ابحث عن أصدقاء لبدء الدردشة.</p></div>`;
+    }
+    return '';
 }
 
 window.saAlert = (msg, type = 'info', title = null) => {
@@ -354,7 +391,7 @@ window.saAlert = (msg, type = 'info', title = null) => {
     modal.classList.add('active');
 };
 
-window.saConfirm = (msg, onConfirm, yesLabel = 'نعم، متابعة', yesColor = 'var(--warning)') => {
+window.saConfirm = (msg, onConfirm) => {
     playSound('click');
     const modal = document.getElementById('sa-custom-alert');
     document.getElementById('sa-alert-icon').innerHTML = '<i class="fas fa-question-circle" style="color:var(--warning)"></i>';
@@ -363,7 +400,7 @@ window.saConfirm = (msg, onConfirm, yesLabel = 'نعم، متابعة', yesColor
     const actionsDiv = document.getElementById('sa-alert-actions');
     actionsDiv.innerHTML = '';
     const btnYes = document.createElement('button');
-    btnYes.className = 'sa-btn sa-btn-primary'; btnYes.innerText = yesLabel; btnYes.style.background = yesColor;
+    btnYes.className = 'sa-btn sa-btn-primary'; btnYes.innerText = 'نعم، متابعة'; btnYes.style.background = 'var(--warning)';
     btnYes.onclick = () => { closeSaAlert(); onConfirm(); };
     const btnNo = document.createElement('button');
     btnNo.className = 'sa-btn sa-btn-secondary'; btnNo.innerText = 'إلغاء';
@@ -375,7 +412,12 @@ window.saConfirm = (msg, onConfirm, yesLabel = 'نعم، متابعة', yesColor
 window.closeSaAlert = () => { playSound('click'); document.getElementById('sa-custom-alert').classList.remove('active'); };
 
 function createAdBanner() {
-    return document.createElement('span');
+    // Use native ad cards instead of iframe ads for better UX
+    // Only show ad every 4 items using a counter
+    if (typeof createAdBanner._count === 'undefined') createAdBanner._count = 0;
+    createAdBanner._count++;
+    if (createAdBanner._count % 4 !== 0) return null;
+    return createNativeAdCard();
 }
 
 const getBase64 = (file) => new Promise((resolve) => {
@@ -397,22 +439,15 @@ async function recognizeImageText(imageBase64) {
     }
 }
 
-async function callPollinationsAI(messages) {
-    const tryFetch = async (model) => {
-        const r = await fetch('https://text.pollinations.ai/', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages, model, private: true, seed: Math.floor(Math.random()*9999) })
-        });
-        if (!r.ok) throw new Error(r.status);
-        const txt = await r.text();
-        if (!txt || txt.trim().length === 0) throw new Error('empty');
-        return txt;
-    };
-    try { return await tryFetch('openai'); }
-    catch(e) {
-        try { return await tryFetch('mistral'); }
-        catch(e2) { throw new Error('فشل الاتصال بالذكاء الاصطناعي: ' + e2.message); }
+async function callPollinationsAI(prompt) {
+    const url = `https://text.pollinations.ai/${encodeURIComponent(prompt)}`;
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('API Error');
+        return await response.text();
+    } catch (error) {
+        console.error("AI Error:", error);
+        throw error;
     }
 }
 
@@ -488,63 +523,40 @@ function generateUID() {
 function loginSuccess(name, icon, uid) {
     playSound('success');
     currentUser = name;
-    myUid = uid || null;
+    myUid = uid;
     localStorage.setItem('sa_user', name);
     localStorage.setItem('sa_role', selectedRole);
     localStorage.setItem('sa_icon', icon || (selectedRole === 'student' ? 'fa-user-astronaut' : 'fa-user-tie'));
-    if (uid) localStorage.setItem('sa_uid', uid);
+    localStorage.setItem('sa_uid', uid);
     
     document.getElementById('landing-layer').classList.add('hidden');
     document.getElementById('auth-layer').classList.add('hidden');
     updateMenuInfo();
-
-    const portalId = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-    const portalEl = document.getElementById(portalId);
-    const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-
-    if (portalEl) {
-        portalEl.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
-        portalEl.classList.remove('hidden');
-    }
-
-    const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
-    const hashTab = window.location.hash.replace('#', '');
-    const startTab = (hashTab && allTabs.includes(hashTab)) ? hashTab : defaultTab;
-
-    const startSection = document.getElementById(startTab);
-    if (startSection) startSection.classList.add('active');
-    _currentTabId = startTab;
-    updateTabDots(startTab);
-
-    const navBtns = portalEl ? portalEl.querySelectorAll('.nav-btn') : [];
-    const startIdx = allTabs.indexOf(startTab);
-    navBtns.forEach((b, i) => b.classList.toggle('active', i === startIdx));
-
+    
     if (selectedRole === 'teacher') {
+        document.getElementById('teacher-app').classList.remove('hidden');
         initTeacherApp();
         setTimeout(() => initSwipeNavigation('teacher-app'), 500);
     } else {
+        document.getElementById('student-app').classList.remove('hidden');
         loadStudentExams(); loadStudentGrades(); initStudentReese();
         updateStreakOnLogin();
         setTimeout(() => renderXPHud(), 300);
         setTimeout(() => initSwipeNavigation('student-app'), 500);
-        setTimeout(() => { if (!currentChatId) startNewChat('s'); }, 100);
     }
     initDardasha();
     initVoiceModule(db, currentUser, myUid);
-    initGlobalCallListener();
+    
     initKeyboardFix();
+    
     handleDeepLinksAndRouting();
+    
     showTabDots();
-    if (selectedRole === 'student') {
-        setTimeout(() => {
-            startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
-            triggerAIAnalysisBadge();
-        }, 600);
-        setTimeout(() => renderXPHud(), 300);
-    }
-    if (selectedRole === 'teacher') startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان');
-    checkOnboarding();
+    const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
+    updateTabDots(window.location.hash.replace('#', '') || defaultTab);
+    
+    // Update hero sections
+    setTimeout(updateHeroSections, 300);
 }
 
 function updateOGMeta(title, description, imageUrl) {
@@ -569,9 +581,8 @@ function updateOGMeta(title, description, imageUrl) {
     set('link[rel="canonical"]', 'href', fullUrl);
 }
 
-async function handleDeepLinks(params) {
-    if (!params) params = window._pendingDLParams || new URLSearchParams(window.location.search);
-    window._pendingDLParams = null;
+async function handleDeepLinks() {
+    const params = new URLSearchParams(window.location.search);
     const shareId  = params.get('shareId');
     const examId   = params.get('examId');
     const postId   = params.get('postId');
@@ -631,12 +642,12 @@ async function handleDeepLinks(params) {
 
     if (postId) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
-        const postSnap = await get(ref(db, `posts/${postId}`));
+        const postSnap = await get(ref(db, `reese_posts/${postId}`));
         if (postSnap.exists()) {
             const pd = postSnap.val();
             updateOGMeta(
                 `منشور من ${pd.author || 'مستخدم'} على Reese`,
-                (pd.content || pd.text || '').substring(0, 160) || 'منشور على منصة SA EDU',
+                pd.text?.substring(0, 160) || 'منشور على منصة SA EDU',
                 pd.images?.[0] || pd.image || null
             );
         }
@@ -668,15 +679,11 @@ async function handleDeepLinks(params) {
             updateOGMeta(`محادثة مع ${otherName}`, `افتح المحادثة مع ${otherName} على SA EDU`);
             switchTab(`${prefix}-dardasha`);
             hideDeepLinkLoader();
-            // Show dialog asking if they want to open the chat
-            saConfirm(`هل تريد فتح الدردشة مع ${otherName}؟`, () => {
-                openChatRoom(chatRoom, otherName, otherIcon, otherUid);
-            }, 'دردشة', 'var(--accent-primary)');
+            openChatRoom(chatRoom, otherName, otherIcon, otherUid);
         } else {
             switchTab(`${prefix}-dardasha`);
             hideDeepLinkLoader();
         }
-        window.history.replaceState({}, document.title, window.location.pathname);
         return;
     }
 
@@ -684,31 +691,13 @@ async function handleDeepLinks(params) {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
         const usnap = await get(ref(db, `users/students/${chatUid}`)).catch(() => null)
             || await get(ref(db, `users/teachers/${chatUid}`)).catch(() => null);
-        let otherName = 'مستخدم', otherIcon = 'fa-user';
         if (usnap?.exists()) {
             const ud = usnap.val();
-            otherName = ud.username || 'مستخدم';
-            otherIcon = ud.icon || 'fa-user';
-            updateOGMeta(`تواصل مع ${otherName}`, `ابدأ محادثة مع ${otherName} على SA EDU`);
+            updateOGMeta(`تواصل مع ${ud.username || 'مستخدم'}`, `ابدأ محادثة مع ${ud.username || 'مستخدم'} على SA EDU`);
         }
         switchTab(`${prefix}-dardasha`);
+        searchUserById(chatUid);
         hideDeepLinkLoader();
-        window.history.replaceState({}, document.title, window.location.pathname);
-        // Show dialog asking if they want to start chat
-        saConfirm(`هل تريد بدء الدردشة مع ${otherName}؟`, async () => {
-            const existingSnap = await get(ref(db, `user_chats/${myUid}`)).catch(() => null);
-            let existingChatId = null;
-            if (existingSnap?.exists()) {
-                for (const [cid, cinfo] of Object.entries(existingSnap.val())) {
-                    if (cinfo.otherUid === chatUid) { existingChatId = cid; break; }
-                }
-            }
-            if (existingChatId) {
-                openChatRoom(existingChatId, otherName, otherIcon, chatUid);
-            } else {
-                searchUserById(chatUid);
-            }
-        }, 'دردشة', 'var(--accent-primary)');
         return;
     }
 
@@ -732,30 +721,11 @@ function hideDeepLinkLoader() {
 }
 
 function handleDeepLinksAndRouting() {
-    // Remove pending link banner if shown
-    const banner = document.getElementById('pending-link-banner');
-    if (banner) banner.remove();
-
-    // Check current URL params first, then fallback to saved pending deeplink
-    let params = new URLSearchParams(window.location.search);
-    let hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
-
-    if (!hasDeepLink) {
-        const saved = localStorage.getItem('sa_pending_deeplink');
-        if (saved) {
-            params = new URLSearchParams(saved);
-            hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
-            if (hasDeepLink) {
-                // Temporarily set search so handleDeepLinks can read it
-                const origSearch = window.location.search;
-                Object.defineProperty(window, '_pendingDLParams', { value: params, configurable: true, writable: true });
-            }
-        }
-    }
-    localStorage.removeItem('sa_pending_deeplink');
-
+    const params = new URLSearchParams(window.location.search);
+    const hasDeepLink = params.get('shareId') || params.get('examId') || params.get('postId') || params.get('chat') || params.get('room') || params.get('aiTab');
+    
     if (hasDeepLink) {
-        handleDeepLinks(params);
+        handleDeepLinks();
         return;
     }
     
@@ -819,22 +789,14 @@ window.saveProfileName = async () => {
     playSound('click');
     const newName = document.getElementById('edit-name-input').value.trim();
     if(!newName || newName === currentUser) return;
-    saConfirm("تغيير الاسم؟ هيتم نقل بياناتك للاسم الجديد.", async () => {
-        try {
-            const oldRef = ref(db, `users/${selectedRole}s/${currentUser}`);
-            const snapshot = await get(oldRef);
-            const data = snapshot.val();
-            // Preserve UID when moving to new name
-            await set(ref(db, `users/${selectedRole}s/${newName}`), data);
-            await remove(oldRef);
-            currentUser = newName; 
-            localStorage.setItem('sa_user', newName);
-            updateMenuInfo(); 
-            saAlert("تم تغيير الاسم بنجاح", "success"); 
-            toggleEditProfile();
-        } catch(e) {
-            saAlert("فشل في تغيير الاسم", "error");
-        }
+    saConfirm("تغيير الاسم سيؤدي لإنشاء حساب جديد. هل أنت متأكد؟", async () => {
+        const oldRef = ref(db, `users/${selectedRole}s/${currentUser}`);
+        const snapshot = await get(oldRef);
+        const data = snapshot.val();
+        await set(ref(db, `users/${selectedRole}s/${newName}`), data);
+        await remove(oldRef);
+        currentUser = newName; localStorage.setItem('sa_user', newName);
+        updateMenuInfo(); saAlert("تم تغيير الاسم بنجاح", "success"); toggleEditProfile();
     });
 };
 
@@ -876,118 +838,97 @@ function startTypewriter(elementId, text) {
 }
 if(document.getElementById('landing-type-text')) { startTypewriter("landing-type-text", "منصة تعليمية ذكية تنقلك إلى آفاق المستقبل"); }
 
-let _currentTabId = null;
-
-// Firebase listener unsubscribe trackers - prevent duplicate listeners
-let _reeseListener = null;
-let _testsListener = null;
-let _dardashaListener = null;
-let _chatRoomListener = null;
-let _studentExamsListener = null;
-let _studentGradesListener = null;
 window.switchTab = (tabId, btn) => {
     playSound('click');
     const portal = selectedRole === 'teacher' ? 'teacher-app' : 'student-app';
-    const newSection = document.getElementById(tabId);
-    if (!newSection) return;
-    if (_currentTabId && tabId === _currentTabId) return;
-
-    const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-    const isAI = tabId.endsWith('-ai');
-    const portalEl = document.getElementById(portal);
-
-    if (portalEl) {
-        portalEl.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll(`#${portal} .app-section`).forEach(s => s.classList.add('hidden'));
+    document.getElementById(tabId).classList.remove('hidden');
+    if(btn) { 
+        document.querySelectorAll(`#${portal} .nav-btn`).forEach(b => b.classList.remove('active')); 
+        btn.classList.add('active'); 
     }
-
-    newSection.classList.add('active');
-    _currentTabId = tabId;
-
-    if (btn) {
-        document.querySelectorAll(`#${portal} .nav-btn`).forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+    
+    if (!_suppressHistoryPush) {
+        const allTabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
+        if (allTabs.includes(tabId)) {
+            window.history.pushState({ tab: tabId }, '', '#' + tabId);
+        }
     }
-    if (!_suppressHistoryPush && tabs.includes(tabId)) {
-        window.history.pushState({ tab: tabId }, '', '#' + tabId);
-    }
-
+    
     updateTabDots(tabId);
-
-    if (tabId === 's-grades') loadStudentGrades();
-    if (tabId === 's-exams') {
+    
+    if(tabId === 's-grades') loadStudentGrades();
+    if(tabId === 's-exams') {
         loadStudentExams();
-        startTypewriter('student-type-text', 'تحليل المستوى الدراسي');
+        startTypewriter("student-type-text", "تحليل المستوى الدراسي");
         if (selectedRole === 'student') setTimeout(() => renderXPHud(), 200);
     }
-    if (tabId === 't-library') { loadTeacherTests(); startTypewriter('cta-type-text', 'اضغط هنا لكتابة الامتحان'); }
-    if (tabId === 't-reese' || tabId === 's-reese') loadReesePosts(selectedRole === 'teacher' ? 't' : 's');
-    if (isAI) {
-        const p = tabId.charAt(0);
-        const msgsEl = document.getElementById(`${p}-ai-msgs`);
-        if (!currentChatId || !msgsEl || msgsEl.children.length === 0) {
-            startNewChat(p);
-        }
+    if(tabId === 't-library') {
+        loadTeacherTests();
+        startTypewriter("cta-type-text", "اضغط هنا لكتابة الامتحان");
     }
-    if (tabId.endsWith('-dardasha')) {
+    if(tabId === 't-reese' || tabId === 's-reese') {
         const prefix = selectedRole === 'teacher' ? 't' : 's';
-        const chatList = document.getElementById(`${prefix}-chat-list`);
-        if (chatList && chatList.children.length === 0) {
-            initDardasha();
-        }
+        loadReesePosts(prefix);
     }
+    if(tabId === 't-ai' && !currentChatId) startNewChat('t');
+    if(tabId === 's-ai' && !currentChatId) startNewChat('s');
+    
+    setTimeout(() => {
+        const aiInput = document.getElementById(`${tabId.charAt(0)}-ai-input`);
+        if (aiInput) {
+            aiInput.addEventListener('focus', () => {
+                if (window.innerWidth < 768) {
+                    setTimeout(() => {
+                        aiInput.scrollIntoView({ behavior: 'smooth', block: 'end' });
+                    }, 350);
+                }
+            });
+        }
+    }, 100);
 };
 
 function initDardasha() {
     const prefix = selectedRole === 'teacher' ? 't' : 's';
     const list = document.getElementById(`${prefix}-chat-list`);
     list.innerHTML = getMultipleSkeletons(2);
-    if (_dardashaListener) { _dardashaListener(); _dardashaListener = null; }
-    if (!myUid) { list.innerHTML = getEmptyStateHTML('chats'); return; }
-    _dardashaListener = onValue(ref(db, `user_chats/${myUid}`), (snap) => {
+    
+    onValue(ref(db, `user_chats/${myUid}`), (snap) => {
         list.innerHTML = '';
-        if (!snap.exists()) {
+        if(!snap.exists()) {
             list.innerHTML = getEmptyStateHTML('chats');
             return;
         }
-
+        
         const chats = snap.val();
-        const chatEntries = Object.entries(chats).sort((a, b) => (b[1].lastMsgTime || 0) - (a[1].lastMsgTime || 0));
-
-        chatEntries.forEach(([chatId, chatInfo]) => {
+        
+        const chatEntries = Object.entries(chats);
+        chatEntries.forEach(([chatId, chatInfo], index) => {
             const el = document.createElement('div');
             el.className = 'chat-item';
             el.onclick = () => openChatRoom(chatId, chatInfo.otherName, chatInfo.otherIcon, chatInfo.otherUid);
-
-            let lastMsgPreview = 'ابدأ المحادثة...';
-            if (chatInfo.lastMsg) {
-                if (chatInfo.lastMsg.startsWith('data:image')) lastMsgPreview = '📷 صورة';
-                else if (chatInfo.lastMsg.startsWith('data:audio')) lastMsgPreview = '🎤 صوت';
-                else lastMsgPreview = chatInfo.lastMsg.substring(0, 35) + (chatInfo.lastMsg.length > 35 ? '...' : '');
-            }
-
-            const timeStr = chatInfo.lastMsgTime ? new Date(chatInfo.lastMsgTime).toLocaleTimeString('ar', { hour: '2-digit', minute: '2-digit' }) : '';
-
             el.innerHTML = `
-                <div class="chat-item-avatar"><i class="fas ${chatInfo.otherIcon || 'fa-user'}"></i></div>
-                <div class="chat-item-info">
-                    <div class="chat-item-row">
-                        <span class="chat-item-name">${chatInfo.otherName}</span>
-                        <span class="chat-item-time">${timeStr}</span>
+                <div class="avatar-frame mini-frame" style="border-color: #666; color: #ccc;"><i class="fas ${chatInfo.otherIcon}"></i></div>
+                <div style="flex:1;">
+                    <div style="font-weight:bold; color:#fff; display:flex; justify-content:space-between;">
+                        <span>${chatInfo.otherName}</span>
+                        <span style="font-size:0.7rem; color:#666;">${chatInfo.lastMsgTime ? new Date(chatInfo.lastMsgTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
                     </div>
-                    <div class="chat-item-preview">${lastMsgPreview}</div>
+                    <div style="font-size:0.8rem; color:#aaa; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;">
+                        ${chatInfo.lastMsg ? (chatInfo.lastMsg.includes('data:image') ? '📷 صورة' : chatInfo.lastMsg) : 'ابدأ المحادثة...'}
+                    </div>
                 </div>
             `;
             list.appendChild(el);
-            list.appendChild(createAdBanner());
+            
+            { const _ad = createAdBanner(); if (_ad) list.appendChild(_ad); }
         });
-
+        
         chatEntries.forEach(([chatId, chatInfo]) => {
-            if (chatInfo.lastMsgTime > Date.now() - 5000 && activeChatRoomId !== chatId) {
-                if (chatInfo.lastMsg && !chatInfo.lastMsg.startsWith('data:')) {
-                    playSound('recv');
-                    showInAppNotif(chatInfo.otherName, chatInfo.lastMsg.substring(0, 50));
-                }
-            }
+             if(chatInfo.lastMsgTime > Date.now() - 5000 && chatInfo.lastMsg !== "📷 صورة" && activeChatRoomId !== chatId) {
+                 playSound('recv');
+                 showToast(chatInfo.otherName, chatInfo.lastMsg?.substring(0, 50) || '...', 'msg', 3500);
+             }
         });
     });
 }
@@ -1025,25 +966,20 @@ window.searchUserById = async (forcedId = null) => {
     let foundUser = null;
     let foundRole = '';
     
-    try {
-        const sSnap = await get(ref(db, `users/students`));
-        if(sSnap.exists()) {
-            Object.entries(sSnap.val()).forEach(([name, data]) => {
-                if(data && data.uid && String(data.uid) === String(id)) { foundUser = {name, ...data}; foundRole = 'student'; }
+    const sSnap = await get(ref(db, `users/students`));
+    if(sSnap.exists()) {
+        Object.entries(sSnap.val()).forEach(([name, data]) => {
+            if(data.uid == id) { foundUser = {name, ...data}; foundRole = 'student'; }
+        });
+    }
+    
+    if(!foundUser) {
+        const tSnap = await get(ref(db, `users/teachers`));
+        if(tSnap.exists()) {
+            Object.entries(tSnap.val()).forEach(([name, data]) => {
+                if(data.uid == id) { foundUser = {name, ...data}; foundRole = 'teacher'; }
             });
         }
-        
-        if(!foundUser) {
-            const tSnap = await get(ref(db, `users/teachers`));
-            if(tSnap.exists()) {
-                Object.entries(tSnap.val()).forEach(([name, data]) => {
-                    if(data && data.uid && String(data.uid) === String(id)) { foundUser = {name, ...data}; foundRole = 'teacher'; }
-                });
-            }
-        }
-    } catch(e) {
-        if(!forcedId) resultDiv.innerHTML = `<div class="search-result-empty error"><i class="fas fa-wifi-slash"></i><span>خطأ في الاتصال</span></div>`;
-        return;
     }
     
     if(foundUser) {
@@ -1053,26 +989,18 @@ window.searchUserById = async (forcedId = null) => {
              return;
         }
 
-        const roleLabel = foundRole === 'teacher' ? 'معلم' : 'طالب';
-        const roleColor = foundRole === 'teacher' ? '#d4af37' : '#3b82f6';
-        const roleIcon = foundRole === 'teacher' ? 'fa-chalkboard-user' : 'fa-user-graduate';
+        const roleColor = foundRole === 'teacher' ? 'var(--accent-gold)' : 'var(--accent-primary)';
         resultDiv.innerHTML = `
-            <div class="search-result-card">
-                <div class="src-avatar" style="border-color:${roleColor}22; color:${roleColor};">
-                    <i class="fas ${foundUser.icon || 'fa-user'}"></i>
+            <div style="background:#222; padding:15px; border-radius:15px; text-align:center; margin-top:15px;">
+                <div class="avatar-frame mini-frame" style="margin:0 auto 10px; color:${roleColor}; border-color:${roleColor};">
+                    <i class="fas ${foundUser.icon}"></i>
                 </div>
-                <div class="src-info">
-                    <div class="src-name">${foundUser.name}</div>
-                    <div class="src-role" style="color:${roleColor};"><i class="fas ${roleIcon}"></i> ${roleLabel}</div>
-                    <div class="src-uid">ID: ${foundUser.uid}</div>
-                </div>
-                <button class="src-chat-btn" onclick="startChatWithUser('${foundUser.name}', '${foundUser.icon}', '${foundUser.uid}')">
-                    <i class="fas fa-message"></i>
-                </button>
+                <h4 style="margin:0 0 10px;">${foundUser.name}</h4>
+                <button class="modern-btn" onclick="startChatWithUser('${foundUser.name}', '${foundUser.icon}', '${foundUser.uid}')">بدء المحادثة</button>
             </div>
         `;
     } else {
-        if(!forcedId) resultDiv.innerHTML = `<div class="search-result-empty"><i class="fas fa-user-slash"></i><span>المستخدم غير موجود</span></div>`;
+        if(!forcedId) resultDiv.innerHTML = '<p style="color:var(--danger); text-align:center;">المستخدم غير موجود</p>';
     }
 };
 
@@ -1090,389 +1018,16 @@ window.startChatWithUser = async (otherName, otherIcon, otherUid) => {
 };
 
 let _activeChatMsgKeys = {};
-let _voiceRec = null;
+let _voiceRecorder = null;
 let _voiceChunks = [];
-let _voiceRecording = false;
-let _voiceTimerInt = null;
-let _voiceSeconds = 0;
-
-window.startChatSpeech = async (chatId, otherUid) => {
-    if (_voiceRecording) {
-        stopAndSendVoiceMsg(chatId, otherUid);
-        return;
-    }
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-            ? 'audio/webm;codecs=opus'
-            : MediaRecorder.isTypeSupported('audio/webm')
-            ? 'audio/webm'
-            : 'audio/ogg';
-
-        _voiceRec = new MediaRecorder(stream, { mimeType });
-        _voiceChunks = [];
-        _voiceSeconds = 0;
-        _voiceRecording = true;
-
-        _voiceRec.ondataavailable = (e) => { if (e.data && e.data.size > 0) _voiceChunks.push(e.data); };
-        _voiceRec.start(200);
-
-        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-        const timerEl = document.getElementById(`voice-timer-${chatId}`);
-        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-        if (bar) bar.classList.remove('hidden');
-        if (micBtn) { micBtn.style.background = '#ef4444'; micBtn.style.color = '#fff'; }
-
-        _voiceTimerInt = setInterval(() => {
-            _voiceSeconds++;
-            const m = Math.floor(_voiceSeconds / 60);
-            const s = _voiceSeconds % 60;
-            if (timerEl) timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
-            if (_voiceSeconds >= 120) stopAndSendVoiceMsg(chatId, otherUid);
-        }, 1000);
-
-    } catch(e) {
-        saAlert('لم يُسمح بالوصول للمايكروفون', 'error');
-    }
-};
-
-window.cancelChatSpeech = (chatId) => {
-    clearInterval(_voiceTimerInt);
-    if (_voiceRec && _voiceRecording) {
-        _voiceRec.stream?.getTracks().forEach(t => t.stop());
-        try { _voiceRec.stop(); } catch(e) {}
-    }
-    _voiceRec = null; _voiceChunks = []; _voiceRecording = false; _voiceSeconds = 0;
-    const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-    if (bar) bar.classList.add('hidden');
-    const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-    if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
-};
-
-window.stopAndSendVoiceMsg = async function(chatId, otherUid) {
-    if (!_voiceRec || !_voiceRecording) return;
-    clearInterval(_voiceTimerInt);
-    const seconds = _voiceSeconds;
-    const mimeType = _voiceRec.mimeType || 'audio/webm';
-
-    return new Promise((resolve) => {
-        _voiceRec.onstop = async () => {
-            if (_voiceChunks.length === 0) { resolve(); return; }
-            const blob = new Blob(_voiceChunks, { type: mimeType });
-            const reader = new FileReader();
-            reader.onload = async () => {
-                const b64 = reader.result;
-                const dur = `${Math.floor(seconds/60)}:${(seconds%60)<10?'0':''}${seconds%60}`;
-                playSound('sent');
-                await push(ref(db, `chats/${chatId}`), {
-                    sender: myUid, text: b64, type: 'voice',
-                    duration: dur, mimeType, timestamp: Date.now()
-                });
-                await update(ref(db, `user_chats/${myUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
-                await update(ref(db, `user_chats/${otherUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
-                resolve();
-            };
-            reader.readAsDataURL(blob);
-        };
-        _voiceRec.stream?.getTracks().forEach(t => t.stop());
-        try { _voiceRec.stop(); } catch(e) {}
-        _voiceRec = null; _voiceChunks = []; _voiceRecording = false; _voiceSeconds = 0;
-
-        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
-        if (bar) bar.classList.add('hidden');
-        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
-        if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
-    });
-}
-
-let _activePeerCall = null;
-let _peerCallPeer = null;
-let _peerCallStream = null;
-let _miniCallMinimized = false;
-
-window.initiatePeerCall = async (otherUid, otherName, otherIcon) => {
-    await set(ref(db, `call_requests/${otherUid}`), {
-        from: myUid, fromName: currentUser,
-        fromIcon: localStorage.getItem('sa_icon') || 'fa-user',
-        fromUid: myUid, status: 'pending', timestamp: Date.now()
-    });
-    showOutgoingCallUI(otherName, otherIcon, otherUid);
-};
-
-function showOutgoingCallUI(name, icon, otherUid) {
-    removeCallUI();
-    const div = document.createElement('div');
-    div.id = 'call-ui';
-    div.className = 'call-ui-overlay outgoing';
-    div.innerHTML = `
-        <div class="call-card">
-            <div class="call-avatar"><i class="fas ${icon}"></i></div>
-            <div class="call-name">${name}</div>
-            <div class="call-status-txt">جاري الاتصال...</div>
-            <div class="call-actions">
-                <button class="call-btn end" onclick="endPeerCall('${otherUid}')"><i class="ph-bold ph-phone-disconnect"></i></button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(div);
-
-    onValue(ref(db, `call_requests/${myUid}`), (snap) => {
-        if (snap.exists() && snap.val().status === 'accepted') {
-            startActualCall(otherUid, snap.val().peerStreamId, true);
-        } else if (snap.exists() && snap.val().status === 'rejected') {
-            showInAppNotif('مكالمة', `${name} رفض المكالمة`);
-            endPeerCall(otherUid);
-        }
-    });
-};
-
-function showIncomingCallUI(fromName, fromIcon, fromUid, chatPartnerId) {
-    if (document.getElementById('call-ui')) return;
-    const div = document.createElement('div');
-    div.id = 'call-ui';
-    div.className = 'call-ui-overlay incoming';
-    div.innerHTML = `
-        <div class="call-card">
-            <div class="call-avatar incoming-ring"><i class="fas ${fromIcon}"></i></div>
-            <div class="call-name">${fromName}</div>
-            <div class="call-status-txt">مكالمة واردة...</div>
-            <div class="call-actions">
-                <button class="call-btn accept" onclick="acceptPeerCall('${fromUid}')"><i class="ph-bold ph-phone"></i></button>
-                <button class="call-btn end" onclick="rejectPeerCall('${fromUid}')"><i class="ph-bold ph-phone-disconnect"></i></button>
-            </div>
-        </div>
-    `;
-    document.body.appendChild(div);
-    playRingtone();
-}
-
-window.acceptPeerCall = async (fromUid) => {
-    stopRingtone();
-    try {
-        _peerCallStream = await getMicStream();
-    } catch(e) {
-        saAlert('لا يمكن الوصول للمايكروفون', 'error');
-        rejectPeerCall(fromUid);
-        return;
-    }
-    const roomId = 'call_' + [myUid, fromUid].sort().join('_');
-    await update(ref(db, `call_requests/${fromUid}`), { status: 'accepted', peerStreamId: roomId });
-    await remove(ref(db, `call_requests/${myUid}`));
-    startActualCall(fromUid, roomId, false);
-};
-
-window.rejectPeerCall = async (fromUid) => {
-    stopRingtone();
-    await update(ref(db, `call_requests/${fromUid}`), { status: 'rejected' });
-    await remove(ref(db, `call_requests/${myUid}`));
-    removeCallUI();
-};
-
-async function startActualCall(otherUid, roomId, isCaller) {
-    if (!_peerCallStream) {
-        try { _peerCallStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
-        catch(e) { endPeerCall(otherUid); return; }
-    }
-    removeCallUI();
-    showActiveCallUI(roomId, otherUid);
-    voiceJoinRoom(roomId);
-}
-
-function showActiveCallUI(roomId, otherUid) {
-    document.getElementById('mini-call-bar')?.remove();
-    const mini = document.createElement('div');
-    mini.id = 'mini-call-bar';
-    mini.className = 'mini-call-bar';
-    mini.innerHTML = `
-        <div class="mini-call-left">
-            <span class="mini-live-dot"></span>
-            <span class="mini-call-label">مكالمة جارية</span>
-        </div>
-        <button class="mini-call-btn expand" onclick="expandVoiceRoom()" title="فتح المكالمة">
-            <i class="ph-bold ph-arrows-out"></i>
-        </button>
-        <button class="mini-call-btn end" onclick="endPeerCall('${otherUid}')" title="إنهاء">
-            <i class="ph-bold ph-phone-disconnect"></i>
-        </button>
-    `;
-    document.body.appendChild(mini);
-    requestAnimationFrame(() => mini.classList.add('visible'));
-}
-
-window.expandVoiceRoom = () => {
-    const screen = document.getElementById('voice-room-screen');
-    if (screen) screen.classList.add('open');
-    const bar = document.getElementById('mini-call-bar');
-    if (bar) bar.style.display = 'none';
-};
-
-window.minimizeVoiceRoom = () => {
-    const screen = document.getElementById('voice-room-screen');
-    if (screen) screen.classList.remove('open');
-    const bar = document.getElementById('mini-call-bar');
-    if (bar) { bar.style.display = ''; bar.classList.add('visible'); }
-};
-
-window.endPeerCall = async (otherUid) => {
-    stopRingtone();
-    if (_peerCallStream) { _peerCallStream.getTracks().forEach(t => t.stop()); _peerCallStream = null; }
-    await remove(ref(db, `call_requests/${myUid}`)).catch(() => {});
-    await remove(ref(db, `call_requests/${otherUid}`)).catch(() => {});
-    removeCallUI();
-    if (window.voiceExitRoom) voiceExitRoom();
-};
-
-function removeCallUI() {
-    document.getElementById('call-ui')?.remove();
-    document.getElementById('mini-call-bar')?.remove();
-}
-
-let _ringtoneOsc = null;
-function playRingtone() {
-    try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.connect(g); g.connect(ctx.destination);
-        osc.type = 'sine'; osc.frequency.value = 440;
-        g.gain.value = 0.15;
-        osc.start();
-        _ringtoneOsc = { osc, ctx };
-    } catch(e) {}
-}
-function stopRingtone() {
-    if (_ringtoneOsc) {
-        try { _ringtoneOsc.osc.stop(); _ringtoneOsc.ctx.close(); } catch(e) {}
-        _ringtoneOsc = null;
-    }
-}
-
-let _micStream = null;
-async function getMicStream() {
-    if (_micStream && _micStream.active) return _micStream;
-    _micStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    });
-    return _micStream;
-}
-window.getMicStream = getMicStream;
-
-function triggerAIAnalysisBadge() {
-    // Robot icon removed as requested
-}
-
-function checkOnboarding() {
-    const key = `sa_onboarded_${selectedRole}`;
-    if (localStorage.getItem(key)) return;
-    setTimeout(() => startOnboardingTour(), 800);
-}
-
-function startOnboardingTour() {
-    const role = selectedRole;
-    const steps = role === 'student' ? [
-        { target: 's-exams-list', icon: '📚', title: 'الاختبارات', text: 'هنا بتلاقي كل الاختبارات اللي رفعها المعلمين. ادخل واحد وحل!' },
-        { target: 'xp-hud', icon: '⚡', title: 'نقاط XP', text: 'كل اختبار بتعمله بيكسبك XP وبتتدرج في المستويات. وصّل للقمة!' },
-        { target: 's-reese-btn', icon: '✍️', title: 'Reese', text: 'شارك أفكارك ومذاكرتك مع باقي الطلاب في مجتمع Reese.' },
-        { target: 's-dardasha-btn', icon: '💬', title: 'الدردشة', text: 'تكلم مع زملائك ومعلميك مباشرة. وفيه غرف صوتية كمان!' },
-        { target: 's-ai-btn', icon: '🤖', title: 'AI المساعد', text: 'المساعد الذكي بيحلل مستواك ويساعدك في المذاكرة 24/7.' },
-    ] : [
-        { target: 't-library', icon: '📖', title: 'المكتبة', text: 'كل اختباراتك هنا. ضغط + لإنشاء اختبار جديد في ثواني.' },
-        { target: 't-reese', icon: '✍️', title: 'Reese', text: 'انشر إعلانات وملاحظات للطلاب بسهولة.' },
-        { target: 't-dardasha', icon: '💬', title: 'الدردشة', text: 'تواصل مع طلابك ومعلمين آخرين مباشرة.' },
-        { target: 't-ai', icon: '🤖', title: 'AI', text: 'المساعد الذكي بيساعدك في إنشاء أسئلة وتحليل نتائج الطلاب.' },
-    ];
-
-    let currentStep = 0;
-    const overlay = document.createElement('div');
-    overlay.id = 'onboard-overlay';
-    overlay.className = 'onboard-overlay';
-
-    const card = document.createElement('div');
-    card.className = 'onboard-card';
-
-    function render(i) {
-        const s = steps[i];
-        card.innerHTML = `
-            <div class="onboard-icon">${s.icon}</div>
-            <div class="onboard-title">${s.title}</div>
-            <div class="onboard-text">${s.text}</div>
-            <div class="onboard-dots">
-                ${steps.map((_, j) => `<div class="onboard-dot ${j===i?'active':''}"></div>`).join('')}
-            </div>
-            <div class="onboard-actions">
-                <button class="onboard-skip" onclick="finishOnboarding()">تخطي</button>
-                <button class="onboard-next" onclick="nextOnboardStep(${i+1},${steps.length})">
-                    ${i === steps.length-1 ? 'ابدأ! 🚀' : 'التالي →'}
-                </button>
-            </div>
-        `;
-    }
-
-    window.nextOnboardStep = (i, total) => {
-        if (i >= total) { finishOnboarding(); return; }
-        currentStep = i;
-        card.classList.remove('onboard-card-in');
-        void card.offsetWidth;
-        card.classList.add('onboard-card-in');
-        render(i);
-    };
-
-    window.finishOnboarding = () => {
-        overlay.classList.remove('onboard-show');
-        setTimeout(() => overlay.remove(), 400);
-        localStorage.setItem(`sa_onboarded_${selectedRole}`, '1');
-    };
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-    render(0);
-    requestAnimationFrame(() => {
-        overlay.classList.add('onboard-show');
-        card.classList.add('onboard-card-in');
-    });
-}
-
-function initGlobalCallListener() {
-    if (!myUid) return;
-    onValue(ref(db, `call_requests/${myUid}`), (snap) => {
-        if (!snap.exists()) return;
-        const req = snap.val();
-        if (req.status === 'pending' && req.from !== myUid) {
-            if (!document.getElementById('call-ui')) {
-                showIncomingCallUI(req.fromName, req.fromIcon, req.fromUid);
-            }
-        }
-    });
-}
-
-function showInAppNotif(title, body) {
-    let container = document.getElementById('inapp-notif-container');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'inapp-notif-container';
-        document.body.appendChild(container);
-    }
-    const notif = document.createElement('div');
-    notif.className = 'inapp-notif';
-    notif.innerHTML = `<div class="inapp-notif-title">${title}</div><div class="inapp-notif-body">${body}</div>`;
-    container.appendChild(notif);
-    requestAnimationFrame(() => notif.classList.add('show'));
-    setTimeout(() => { notif.classList.remove('show'); setTimeout(() => notif.remove(), 300); }, 4000);
-    notif.onclick = () => notif.remove();
-}
-
-window.voiceToggleMic = () => {
-    const btn = document.getElementById('vr-mic-btn');
-    const isActive = btn?.classList.contains('active');
-    if (window.voiceToggleMic_impl) { window.voiceToggleMic_impl(); return; }
-    if (btn) btn.classList.toggle('active');
-};
+let _isVoiceRecording = false;
+let _voiceChatId = null;
+let _voiceOtherUid = null;
 
 window.openChatRoom = (chatId, name, icon, uid) => {
     playSound('click');
     activeChatRoomId = chatId;
     _activeChatMsgKeys = {};
-    if (_chatRoomListener) { _chatRoomListener(); _chatRoomListener = null; }
     const prefix = selectedRole === 'teacher' ? 't' : 's';
     const win = document.getElementById(`${prefix}-chat-window`);
 
@@ -1485,17 +1040,15 @@ window.openChatRoom = (chatId, name, icon, uid) => {
         <div class="chat-header">
             <button class="icon-btn-small" onclick="closeChatWindow('${prefix}')"><i class="ph-bold ph-arrow-right"></i></button>
             <div class="avatar-frame mini-frame" style="width:38px;height:38px;font-size:1.1rem;border-width:1px;"><i class="fas ${icon}"></i></div>
-            <div style="flex:1;min-width:0;">
+            <div>
                 <div style="font-weight:700;font-size:0.95rem;">${name}</div>
                 <div id="chat-online-${chatId}" style="font-size:0.7rem;color:#25d366;">متصل</div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-                <button class="icon-btn-small call-icon-btn" onclick="initiatePeerCall('${uid}','${name}','${icon}')" title="مكالمة صوتية">
+            <div style="margin-right:auto;display:flex;gap:10px;">
+                <button class="chat-call-btn" id="chat-call-btn-${chatId}" onclick="startDirectCall('${uid}', '${name}', '${icon}')" title="مكالمة صوتية">
                     <i class="ph-bold ph-phone"></i>
                 </button>
-                <button class="icon-btn-small" onclick="copyProfileLinkFor('${uid}')" title="نسخ رابط">
-                    <i class="ph-bold ph-link"></i>
-                </button>
+                <button class="icon-btn-small" onclick="copyProfileLinkFor('${uid}')" title="نسخ رابط"><i class="ph-bold ph-link"></i></button>
             </div>
         </div>
         <div class="chat-msgs-area" id="chat-msgs-${chatId}"></div>
@@ -1508,7 +1061,14 @@ window.openChatRoom = (chatId, name, icon, uid) => {
                 onkeypress="handleChatEnter(event,'${chatId}','${uid}')"
                 oninput="toggleChatMicSend('${chatId}')"
                 onfocus="handleChatInputFocus(this)">
-            <button id="chat-send-btn-${chatId}" class="send-btn" onclick="sendChatMessage('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
+            <button id="chat-send-btn-${chatId}" class="send-btn" style="display:none" onclick="sendChatMessage('${chatId}','${uid}')"><i class="ph-bold ph-paper-plane-tilt"></i></button>
+            <button id="chat-mic-btn-${chatId}" class="send-btn" style="background:rgba(255,255,255,0.08);color:#aaa;" onclick="toggleVoiceRecord('${chatId}','${uid}')"><i class="ph-bold ph-microphone"></i></button>
+        </div>
+        <div id="voice-recording-bar-${chatId}" class="voice-recording-bar hidden">
+            <div class="voice-wave-anim"><span></span><span></span><span></span><span></span><span></span></div>
+            <span id="voice-timer-${chatId}" style="color:#ef4444;font-weight:bold;font-size:0.9rem;min-width:40px;">0:00</span>
+            <button onclick="cancelVoiceRecord('${chatId}')" style="background:none;border:none;color:#ef4444;font-size:1.2rem;cursor:pointer;"><i class="ph-bold ph-x"></i></button>
+            <button onclick="stopAndSendVoice('${chatId}','${uid}')" style="background:#25d366;border:none;color:#fff;padding:8px 16px;border-radius:20px;font-weight:bold;cursor:pointer;font-size:0.85rem;"><i class="ph-bold ph-paper-plane-tilt"></i> إرسال</button>
         </div>
     `;
 
@@ -1516,7 +1076,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
     let isFirstLoad = true;
     let prevCount = 0;
 
-    _chatRoomListener = onValue(ref(db, `chats/${chatId}`), (snap) => {
+    onValue(ref(db, `chats/${chatId}`), (snap) => {
         msgContainer.innerHTML = '';
         _activeChatMsgKeys = {};
         if (!snap.exists()) { isFirstLoad = false; return; }
@@ -1544,7 +1104,7 @@ window.openChatRoom = (chatId, name, icon, uid) => {
             const lastMsg = msgArr[msgArr.length - 1];
             if (lastMsg && lastMsg.sender !== myUid) {
                 playSound('recv');
-                showInAppNotif(name, lastMsg.type === 'images' ? '📷 صورة' : lastMsg.type === 'voice' ? '🎤 رسالة صوتية' : (lastMsg.text?.substring(0, 60) || ''));
+                showToast(name, lastMsg.type === 'image' ? '📷 صورة' : lastMsg.type === 'voice' ? '🎤 رسالة صوتية' : (lastMsg.text?.substring(0, 50) || ''), 'msg', 3500);
                 update(ref(db, `chats/${chatId}/${lastMsg._key}`), { readBy: myUid });
             }
         }
@@ -1572,72 +1132,24 @@ function appendChatMsg(container, msg, chatId, otherUid, otherName) {
         const imgHtml = imgs.map(src => `<img src="${src}" onclick="openImageViewer(this.src)" style="width:100%;height:100%;object-fit:cover;cursor:pointer;">`).join('');
         content = `<div class="wapp-msg"><div class="wapp-img-grid grid-${grid}">${imgHtml}</div>${buildMsgFooter(msg, isMe)}</div>`;
     } else if (msg.type === 'voice') {
-        const durLabel = msg.duration || '0:00';
         content = `<div class="wapp-msg">
             <div class="wapp-voice-player">
                 <button class="voice-play-btn" onclick="toggleVoicePlay(this,'${msg._key}')"><i class="ph-bold ph-play"></i></button>
                 <div class="voice-waveform">${generateWaveform()}</div>
-                <span class="voice-duration" id="vdur-${msg._key}">${durLabel}</span>
+                <span class="voice-duration">${msg.duration || '0:00'}</span>
+                <audio id="audio-${msg._key}" src="${msg.text}" preload="metadata" onended="resetVoiceBtn('${msg._key}')"></audio>
             </div>
             ${buildMsgFooter(msg, isMe)}
         </div>`;
-        const audioStore = msg.text;
-        const audioKey = msg._key;
-        setTimeout(() => {
-            const playerEl = document.querySelector(`#msg-wrap-${audioKey} .wapp-voice-player`);
-            if (playerEl && !playerEl.querySelector('audio')) {
-                const aud = document.createElement('audio');
-                aud.id = `audio-${audioKey}`;
-                aud.preload = 'metadata';
-                aud.onloadedmetadata = () => {
-                    const dur = aud.duration;
-                    if (dur && isFinite(dur)) {
-                        const m = Math.floor(dur / 60);
-                        const s = Math.floor(dur % 60);
-                        const durEl = document.getElementById(`vdur-${audioKey}`);
-                        if (durEl && durEl.innerText === '0:00') durEl.innerText = `${m}:${s < 10 ? '0'+s : s}`;
-                    }
-                };
-                aud.ontimeupdate = () => {
-                    const dur = aud.duration;
-                    const cur = aud.currentTime;
-                    const durEl = document.getElementById(`vdur-${audioKey}`);
-                    if (durEl && dur && isFinite(dur)) {
-                        const rem = dur - cur;
-                        const m = Math.floor(rem / 60);
-                        const s = Math.floor(rem % 60);
-                        durEl.innerText = `${m}:${s < 10 ? '0'+s : s}`;
-                    }
-                };
-                aud.onended = () => {
-                    resetVoiceBtn(audioKey);
-                    const durEl = document.getElementById(`vdur-${audioKey}`);
-                    if (durEl && aud.duration && isFinite(aud.duration)) {
-                        const m = Math.floor(aud.duration / 60);
-                        const s = Math.floor(aud.duration % 60);
-                        durEl.innerText = `${m}:${s < 10 ? '0'+s : s}`;
-                    }
-                };
-                aud.src = audioStore;
-                playerEl.appendChild(aud);
-            }
-        }, 100);
     } else {
         content = `<div class="wapp-msg"><div class="wapp-text">${makeLinksClickable(msg.text || '')}</div>${buildMsgFooter(msg, isMe)}</div>`;
     }
 
     wrap.innerHTML = content;
 
-    if (!isDeleted) {
-        let holdTimer = null;
-        const onTouchStart = (e) => {
-            holdTimer = setTimeout(() => { showMsgContextMenu(e.touches[0], msg._key, chatId, otherUid, msg.text, isMe); }, 550);
-        };
-        const clearHold = () => clearTimeout(holdTimer);
-        wrap.addEventListener('touchstart', onTouchStart, { passive: true });
-        wrap.addEventListener('touchend', clearHold);
-        wrap.addEventListener('touchmove', clearHold);
+    if (!isDeleted && isMe) {
         wrap.addEventListener('contextmenu', (e) => { e.preventDefault(); showMsgContextMenu(e, msg._key, chatId, otherUid, msg.text, isMe); });
+        wrap.addEventListener('touchstart', touchHoldHandler(wrap, msg._key, chatId, otherUid, msg.text, isMe), { passive: true });
     }
 
     container.appendChild(wrap);
@@ -1659,35 +1171,14 @@ function generateWaveform() {
     return html;
 }
 
-window.toggleVoicePlay = (btn, key) => {
-    const audio = document.getElementById(`audio-${key}`);
-    if (!audio) return;
-    if (audio.paused) {
-        document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
-        document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-            playPromise.then(() => {
-                btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-            }).catch(err => {
-                audio.load();
-                audio.play().then(() => {
-                    btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-                }).catch(() => {});
-            });
-        } else {
-            btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
-        }
-    } else {
-        audio.pause();
-        btn.innerHTML = '<i class="ph-bold ph-play"></i>';
-    }
-};
-
-window.resetVoiceBtn = (key) => {
-    const btn = document.querySelector(`#msg-wrap-${key} .voice-play-btn`);
-    if (btn) btn.innerHTML = '<i class="ph-bold ph-play"></i>';
-};
+function touchHoldHandler(wrap, key, chatId, otherUid, text, isMe) {
+    let holdTimer = null;
+    return function(e) {
+        holdTimer = setTimeout(() => { showMsgContextMenu(e.touches[0], key, chatId, otherUid, text, isMe); }, 600);
+        wrap.addEventListener('touchend', () => clearTimeout(holdTimer), { once: true });
+        wrap.addEventListener('touchmove', () => clearTimeout(holdTimer), { once: true });
+    };
+}
 
 function showMsgContextMenu(e, msgKey, chatId, otherUid, text, isMe) {
     document.querySelectorAll('.msg-ctx-menu').forEach(el => el.remove());
@@ -1708,7 +1199,105 @@ window.deleteChatMsg = async (chatId, msgKey, otherUid) => {
 };
 
 window.toggleChatMicSend = (chatId) => {
-    // Voice removed - send button always visible
+    const inp = document.getElementById(`chat-input-${chatId}`);
+    const send = document.getElementById(`chat-send-btn-${chatId}`);
+    const mic = document.getElementById(`chat-mic-btn-${chatId}`);
+    if (!inp || !send || !mic) return;
+    if (inp.value.trim()) { send.style.display = 'flex'; mic.style.display = 'none'; }
+    else { send.style.display = 'none'; mic.style.display = 'flex'; }
+};
+
+window.toggleVoiceRecord = async (chatId, otherUid) => {
+    if (_isVoiceRecording) { stopAndSendVoice(chatId, otherUid); return; }
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        _voiceRecorder = new MediaRecorder(stream);
+        _voiceChunks = [];
+        _voiceChatId = chatId;
+        _voiceOtherUid = otherUid;
+        _isVoiceRecording = true;
+        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+        bar.classList.remove('hidden');
+        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+        micBtn.style.background = '#ef4444';
+        micBtn.style.color = '#fff';
+
+        let seconds = 0;
+        const timerEl = document.getElementById(`voice-timer-${chatId}`);
+        const timerInt = setInterval(() => {
+            seconds++;
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            if (timerEl) timerEl.innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+        }, 1000);
+        _voiceRecorder._timerInt = timerInt;
+        _voiceRecorder._seconds = () => seconds;
+
+        _voiceRecorder.ondataavailable = (e) => { if (e.data.size > 0) _voiceChunks.push(e.data); };
+        _voiceRecorder.start(100);
+    } catch (e) {
+        saAlert('لم يُسمح بالوصول للمايكروفون', 'error');
+    }
+};
+
+window.cancelVoiceRecord = (chatId) => {
+    if (_voiceRecorder) { clearInterval(_voiceRecorder._timerInt); _voiceRecorder.stop(); _voiceRecorder.stream?.getTracks().forEach(t => t.stop()); }
+    _isVoiceRecording = false; _voiceChunks = [];
+    const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+    if (bar) bar.classList.add('hidden');
+    const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+    if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
+};
+
+window.stopAndSendVoice = async (chatId, otherUid) => {
+    if (!_voiceRecorder || !_isVoiceRecording) return;
+    const seconds = _voiceRecorder._seconds();
+    clearInterval(_voiceRecorder._timerInt);
+
+    return new Promise((resolve) => {
+        _voiceRecorder.onstop = async () => {
+            const blob = new Blob(_voiceChunks, { type: 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const b64 = reader.result;
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                const dur = `${m}:${s < 10 ? '0' : ''}${s}`;
+                playSound('sent');
+                await push(ref(db, `chats/${chatId}`), { sender: myUid, text: b64, type: 'voice', duration: dur, timestamp: Date.now() });
+                await update(ref(db, `user_chats/${myUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
+                await update(ref(db, `user_chats/${otherUid}/${chatId}`), { lastMsg: '🎤 رسالة صوتية', lastMsgTime: Date.now() });
+                resolve();
+            };
+            reader.readAsDataURL(blob);
+        };
+        _voiceRecorder.stop();
+        _voiceRecorder.stream?.getTracks().forEach(t => t.stop());
+        _isVoiceRecording = false; _voiceChunks = [];
+        const bar = document.getElementById(`voice-recording-bar-${chatId}`);
+        if (bar) bar.classList.add('hidden');
+        const micBtn = document.getElementById(`chat-mic-btn-${chatId}`);
+        if (micBtn) { micBtn.style.background = 'rgba(255,255,255,0.08)'; micBtn.style.color = '#aaa'; }
+    });
+};
+
+window.toggleVoicePlay = (btn, key) => {
+    const audio = document.getElementById(`audio-${key}`);
+    if (!audio) return;
+    if (audio.paused) {
+        document.querySelectorAll('audio').forEach(a => { if (a !== audio) { a.pause(); a.currentTime = 0; } });
+        document.querySelectorAll('.voice-play-btn').forEach(b => b.innerHTML = '<i class="ph-bold ph-play"></i>');
+        audio.play();
+        btn.innerHTML = '<i class="ph-bold ph-pause"></i>';
+    } else {
+        audio.pause();
+        btn.innerHTML = '<i class="ph-bold ph-play"></i>';
+    }
+};
+
+window.resetVoiceBtn = (key) => {
+    const btn = document.querySelector(`#msg-wrap-${key} .voice-play-btn`);
+    if (btn) btn.innerHTML = '<i class="ph-bold ph-play"></i>';
 };
 
 window.sendChatImages = async (input, chatId, otherUid) => {
@@ -1732,25 +1321,20 @@ window.sendChatImages = async (input, chatId, otherUid) => {
 
 window.closeChatWindow = (prefix) => {
     playSound('click');
-    if (_chatRoomListener) { _chatRoomListener(); _chatRoomListener = null; }
     document.getElementById(`${prefix}-chat-window`).classList.add('hidden');
     document.getElementById(`${prefix}-chat-sidebar`).classList.remove('hidden');
     activeChatRoomId = null;
 };
 
 window.handleChatInputFocus = (input) => {
-    // Add visual focus state
-    const inputArea = input.closest('.chat-input-area');
-    if (inputArea) {
-        inputArea.classList.add('focused');
-        input.addEventListener('blur', () => inputArea.classList.remove('focused'), { once: true });
-    }
-    // Scroll messages to bottom
-    const chatId = input.id.replace('chat-input-', '');
-    const msgArea = document.getElementById(`chat-msgs-${chatId}`);
-    if (msgArea) {
-        setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 300);
-    }
+    if (window.innerWidth > 768) return;
+    
+    setTimeout(() => {
+        input.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        const chatId = input.id.replace('chat-input-', '');
+        const msgArea = document.getElementById(`chat-msgs-${chatId}`);
+        if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
+    }, 350);
 };
 
 window.handleChatEnter = (e, chatId, otherUid) => {
@@ -1775,7 +1359,6 @@ window.sendChatMessage = async (chatId, otherUid) => {
     await update(ref(db, `user_chats/${otherUid}/${chatId}`), { lastMsg: text, lastMsgTime: Date.now() });
     
     input.value = '';
-    toggleChatMicSend(chatId);
 };
 
 window.sendChatImage = async (input, chatId, otherUid) => {
@@ -1818,18 +1401,21 @@ window.copyProfileLinkFor = async (otherUid) => {
         return;
     }
     const roomId = activeChatRoomId;
-    const myIcon = localStorage.getItem('sa_icon') || 'fa-user';
+    const myData = { username: currentUser };
+    const otherSnap = await get(ref(db, `users/students/${otherUid}`)).catch(() => null)
+        || await get(ref(db, `users/teachers/${otherUid}`)).catch(() => null);
+    const otherName = otherSnap?.val()?.username || 'مستخدم';
+    const otherIcon = otherSnap?.val()?.icon || 'fa-user';
 
-    // Save room meta using data already known from openChatRoom call
     await update(ref(db, `chat_room_meta/${roomId}`), {
         members: [myUid, otherUid],
-        names: { [myUid]: currentUser },
-        icons: { [myUid]: myIcon }
+        names: { [myUid]: currentUser, [otherUid]: otherName },
+        icons: { [myUid]: localStorage.getItem('sa_icon') || 'fa-user', [otherUid]: otherIcon }
     });
 
     const url = `${window.location.href.split('?')[0]}?room=${roomId}`;
     if (navigator.share) {
-        navigator.share({ title: `محادثة على SA EDU`, text: `افتح محادثتنا على SA EDU`, url }).catch(() => {});
+        navigator.share({ title: `محادثة مع ${otherName}`, text: `افتح محادثتنا على SA EDU`, url }).catch(() => {});
     } else {
         navigator.clipboard.writeText(url).then(() => saAlert("تم نسخ رابط الدردشة المباشر!", "success"));
     }
@@ -1838,8 +1424,7 @@ window.copyProfileLinkFor = async (otherUid) => {
 window.filterChats = (prefix, term) => {
     const items = document.querySelectorAll(`#${prefix}-chat-list .chat-item`);
     items.forEach(item => {
-        const nameEl = item.querySelector('.chat-item-name') || item.querySelector('span');
-        const name = (nameEl ? nameEl.innerText : item.innerText).toLowerCase();
+        const name = item.querySelector('div[style*="font-weight:bold"]').innerText.toLowerCase();
         if(name.includes(term.toLowerCase())) item.classList.remove('hidden');
         else item.classList.add('hidden');
     });
@@ -1884,7 +1469,7 @@ async function loadReeseAiSuggestionsAuto() {
         ? ['تحفيز الطلاب', 'نصيحة تعليمية', 'فكرة درس مبتكرة', 'سؤال تفاعلي للطلاب']
         : ['تحفيز ذاتي', 'نصيحة مذاكرة', 'إنجاز شخصي', 'سؤال للمجتمع'];
 
-    const prompt = `أنت مساعد منصة SA EDU التعليمية المتحمس. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح في فئة مختلفة: ${categories.join(', ')}. ${prevStr}. القواعد المهمة: لا تعتذر أبداً، لا تقل "آسف" أو "لا أستطيع"، دائماً أعط 4 اقتراحات بدون مقدمات. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف.`;
+    const prompt = `أنت مساعد منصة SA EDU التعليمية. اقترح 4 منشورات قصيرة وذكية لـ ${roleAr} على منصة تعليمية اجتماعية. كل اقتراح يجب أن يكون في فئة مختلفة: ${categories.join(', ')}. المنشورات تكون طبيعية وواقعية ومميزة وغير رسمية. ${prevStr}. أعد فقط JSON array من 4 strings باللغة العربية. كل منشور أقل من 130 حرف. لا تكتب أي شيء آخر.`;
 
     try {
         let text = await callPollinationsAI(prompt);
@@ -1912,17 +1497,7 @@ async function loadReeseAiSuggestionsAuto() {
             container.appendChild(chip);
         });
     } catch(e) {
-        const defaults = selectedRole === 'teacher'
-            ? ['مَن لا يتعلم في صغره لا يتقدم في كبره — شجّعوا طلابكم على القراءة اليومية', 'نصيحتي: خصّص 10 دقائق يومياً للمراجعة الصامتة', 'سؤال لطلابي: ما الهدف الذي تسعون إليه هذا العام؟', 'أقوى درس تعلّمته: الصبر على الطالب البطيء هو استثمار في مستقبله']
-            : ['اليوم حفظت 10 معادلات — كل خطوة صغيرة تُراكم النجاح', 'نصيحة: لا تذاكر وأنت متعب، استرح ثم ابدأ من جديد', 'أصعب سؤال في الاختبار صار سهلاً بعد المراجعة مرتين', 'مَن منكم يذاكر مع موسيقى؟ جربوها مع الأناشيد'];
-        container.innerHTML = '';
-        defaults.forEach(sug => {
-            const chip = document.createElement('div');
-            chip.className = 'suggestion-chip';
-            chip.innerText = sug;
-            chip.onclick = () => { document.getElementById('reese-text-input').value = sug; };
-            container.appendChild(chip);
-        });
+        container.innerHTML = '<div class="suggestion-chip" style="opacity:0.5; pointer-events:none;"><i class="fas fa-wifi-slash"></i> تعذر تحميل الاقتراحات</div>';
     }
 }
 
@@ -1975,8 +1550,7 @@ window.publishReese = async () => {
 window.loadReesePosts = (prefix) => {
     const container = document.getElementById(`reese-feed-container-${prefix}`);
     container.innerHTML = getMultipleSkeletons(3);
-    if (_reeseListener) { _reeseListener(); _reeseListener = null; }
-    _reeseListener = onValue(ref(db, 'posts'), (snap) => {
+    onValue(ref(db, 'posts'), (snap) => {
         container.innerHTML = '';
         const data = snap.val();
         if(!data) return container.innerHTML = getEmptyStateHTML('posts');
@@ -1995,7 +1569,7 @@ window.loadReesePosts = (prefix) => {
             let imagesHtml = '';
             if(post.images && post.images.length > 0) {
                 const gridClass = post.images.length === 1 ? 'one-img' : 'two-imgs';
-                imagesHtml = `<div class="reese-images-grid ${gridClass}" ondblclick="doubleTapLike('${post.id}', ${post.likes || 0}, this)">${post.images.map(img => `<img src="${img}" class="reese-post-img" onclick="openImageViewer(this.src)">`).join('')}</div>`;
+                imagesHtml = `<div class="reese-images-grid ${gridClass}">${post.images.map(img => `<img src="${img}" class="reese-post-img" onclick="openImageViewer(this.src)">`).join('')}</div>`;
             }
             const div = document.createElement('div');
             div.className = 'reese-card';
@@ -2018,7 +1592,7 @@ window.loadReesePosts = (prefix) => {
                     <button class="reese-btn ${isLiked ? 'liked' : ''}" onclick="likeReese('${post.id}', ${post.likes || 0})"><i class="fas ${isLiked ? 'fa-thumbs-up' : 'fa-thumbs-up'}" style="font-size:1.3rem;"></i> <span style="font-size:1.1rem;">${post.likes || 0}</span></button>
                     <button class="reese-btn" onclick="shareReese('${post.id}')"><i class="fas fa-share"></i> مشاركة</button>
                 </div>`;
-            container.appendChild(div); container.appendChild(createAdBanner());
+            container.appendChild(div); { const _ad = createAdBanner(); if (_ad) container.appendChild(_ad); }
         });
         if(visibleCount === 0) container.innerHTML = getEmptyStateHTML('posts');
     });
@@ -2034,33 +1608,12 @@ window.toggleMyPostsView = () => {
     saAlert(isMyPostsView ? "عرض منشوراتك فقط (وضع الإدارة)" : "عرض كل المنشورات", "info");
 };
 
-window.doubleTapLike = async (id, currentLikes, el) => {
-    const likedPosts = JSON.parse(localStorage.getItem(`liked_posts_${currentUser}`) || '[]');
-    if (likedPosts.includes(id)) return;
-    const heart = document.createElement('div');
-    heart.innerHTML = '<i class="fas fa-heart" style="color:#ef4444; font-size:3rem;"></i>';
-    heart.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;animation:heartPop 0.7s ease forwards;z-index:10;';
-    el.style.position = 'relative';
-    el.appendChild(heart);
-    setTimeout(() => heart.remove(), 700);
-    likeReese(id, currentLikes);
-};
-
 window.likeReese = async (id, currentLikes) => {
-    playSound('click');
+    playSound('like');
     const likedPosts = JSON.parse(localStorage.getItem(`liked_posts_${currentUser}`) || '[]');
     const index = likedPosts.indexOf(id);
-    const wasLiked = index !== -1;
-    
-    // Get fresh likes count from Firebase to avoid race conditions
-    let freshLikes = currentLikes;
-    try {
-        const snap = await get(ref(db, `posts/${id}/likes`));
-        if (snap.exists()) freshLikes = snap.val() || 0;
-    } catch(e) {}
-    
-    const newLikes = wasLiked ? Math.max(0, freshLikes - 1) : freshLikes + 1;
-    if(wasLiked) { likedPosts.splice(index, 1); } else { likedPosts.push(id); }
+    let newLikes = currentLikes;
+    if(index === -1) { likedPosts.push(id); newLikes++; } else { likedPosts.splice(index, 1); newLikes--; }
     localStorage.setItem(`liked_posts_${currentUser}`, JSON.stringify(likedPosts));
     await update(ref(db, `posts/${id}`), { likes: newLikes });
 };
@@ -2116,43 +1669,38 @@ window.renderAiWelcome = (prefix) => {
     const msgs = document.getElementById(`${prefix}-ai-msgs`);
     const firstName = currentUser.split(' ')[0];
     
+    let roleSpecificChips = '';
     let roleDesc = '';
-    let chipsData = [];
 
     if (selectedRole === 'teacher') {
-        roleDesc = 'كيف يمكنني مساعدتك اليوم؟';
-        chipsData = [
-            { icon: 'fas fa-flask', text: 'أنشئ اختبار عن الكيمياء العضوية' },
-            { icon: 'fas fa-book', text: 'اكتب خطة درس عن التاريخ الحديث' },
-            { icon: 'fas fa-users', text: 'كيف أجعل الحصة تفاعلية أكثر؟' },
-            { icon: 'fas fa-chart-bar', text: 'ساعدني في تحليل نتائج الطلاب' },
-        ];
+        roleDesc = 'إنشاء اختبارات، تحضير دروس، وإدارة طلابك بذكاء.';
+        roleSpecificChips = `
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'أنشئ اختبار عن الكيمياء العضوية')"><i class="fas fa-flask"></i><span>إنشاء اختبار</span></div>
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'اكتب خطة درس متكاملة عن التاريخ الحديث')"><i class="fas fa-book"></i><span>تحضير درس</span></div>
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'كيف أجعل الحصة تفاعلية أكثر؟')"><i class="fas fa-users"></i><span>تفاعل الطلاب</span></div>
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'اقترح لي أساليب تقييم مبتكرة')"><i class="fas fa-chart-bar"></i><span>أساليب تقييم</span></div>
+        `;
     } else {
-        roleDesc = 'كيف يمكنني مساعدتك اليوم؟';
-        chipsData = [
-            { icon: 'fas fa-atom', text: 'اشرح لي قانون نيوتن الثاني ببساطة' },
-            { icon: 'fas fa-history', text: 'لخص أحداث الحرب العالمية الأولى' },
-            { icon: 'fas fa-calculator', text: 'ساعدني في حل مسألة رياضيات' },
-            { icon: 'fas fa-clock', text: 'ساعدني في تنظيم وقت المذاكرة' },
-        ];
+        roleDesc = 'شرح دروس، حل مسائل، وتلخيص المواد الدراسية.';
+        roleSpecificChips = `
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'اشرح لي قانون نيوتن الثاني ببساطة')"><i class="fas fa-atom"></i><span>شرح درس</span></div>
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'لخص لي أحداث الحرب العالمية الأولى')"><i class="fas fa-history"></i><span>تلخيص</span></div>
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'ساعدني في تنظيم وقت المذاكرة')"><i class="fas fa-clock"></i><span>تنظيم الوقت</span></div>
+            <div class="ai-chip-v2" onclick="fillAiInput('${prefix}', 'ما الفرق بين الخلية الحيوانية والنباتية؟')"><i class="fas fa-dna"></i><span>مقارنة علمية</span></div>
+        `;
     }
 
     msgs.innerHTML = `
         <div class="ai-welcome-screen">
-            <div class="ai-logo-large"><i class="fas fa-wand-magic-sparkles"></i></div>
-            <h3 class="ai-welcome-title">مرحباً، ${firstName}</h3>
-            <p class="ai-welcome-text">${roleDesc}</p>
-            <div class="ai-chips" id="ai-welcome-chips-${prefix}"></div>
+            <div class="ai-avatar-gemini">
+                <div class="ai-avatar-gemini-inner"><i class="fas fa-wand-magic-sparkles"></i></div>
+            </div>
+            <h3 class="ai-welcome-title">مرحباً ${firstName} 👋</h3>
+            <p class="ai-welcome-text">أنا <strong>SA AI</strong> — مساعدك الذكي.<br>${roleDesc}</p>
+            <div class="ai-welcome-chips-grid">
+                ${roleSpecificChips}
+            </div>
         </div>`;
-
-    const chipsContainer = document.getElementById(`ai-welcome-chips-${prefix}`);
-    chipsData.forEach(c => {
-        const chip = document.createElement('div');
-        chip.className = 'ai-chip';
-        chip.innerHTML = `<i class="${c.icon}"></i> ${c.text}`;
-        chip.addEventListener('click', () => fillAiInput(prefix, c.text));
-        chipsContainer.appendChild(chip);
-    });
 };
 
 window.fillAiInput = (prefix, text) => {
@@ -2172,24 +1720,23 @@ window.toggleIncognito = (prefix) => {
     else saAlert("تم إيقاف الوضع المخفي", "info");
 };
 
-async function saveChatToFirebase() {
+function saveChatToLocal() {
     if(isIncognito || currentChatMessages.length === 0) return;
+    const storageKey = `sa_chat_history_${currentUser}`;
+    let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
+    const existingIndex = history.findIndex(c => c.id === currentChatId);
     const firstUserMsg = currentChatMessages.find(m => m.role === 'user');
     const title = firstUserMsg ? (firstUserMsg.content.substring(0, 30) + '...') : 'محادثة جديدة';
-    const chatObj = { id: currentChatId, title, timestamp: Date.now(), messages: currentChatMessages };
-    try {
-        await set(ref(db, `ai_chats/${currentUser}/${currentChatId}`), chatObj);
-    } catch(e) {
-        // Fallback to localStorage
-        const storageKey = `sa_chat_history_${currentUser}`;
-        let history = JSON.parse(localStorage.getItem(storageKey) || '[]');
-        const existingIndex = history.findIndex(c => c.id === currentChatId);
-        if(existingIndex > -1) { history[existingIndex] = chatObj; } else { history.unshift(chatObj); }
-        localStorage.setItem(storageKey, JSON.stringify(history));
+    const chatObj = { id: currentChatId, title: title, timestamp: Date.now(), messages: currentChatMessages };
+    
+    if(existingIndex > -1) { 
+        history[existingIndex] = chatObj; 
+    } else { 
+        history.unshift(chatObj); 
     }
+    
+    localStorage.setItem(storageKey, JSON.stringify(history));
 }
-// Keep saveChatToLocal as alias for compatibility
-function saveChatToLocal() { saveChatToFirebase(); }
 
 window.toggleHistory = (show) => {
     playSound('click');
@@ -2204,59 +1751,16 @@ window.toggleHistory = (show) => {
 
 function renderHistoryList() {
     const list = document.getElementById('ai-history-list');
-    list.innerHTML = '<div style="text-align:center;color:#666;"><i class="fas fa-circle-notch fa-spin"></i></div>';
-    
-    get(ref(db, `ai_chats/${currentUser}`)).then(snap => {
-        list.innerHTML = '';
-        let history = [];
-        if(snap.exists()) {
-            const data = snap.val();
-            history = Object.values(data).sort((a, b) => b.timestamp - a.timestamp);
-        } else {
-            // Fallback from localStorage
-            history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
-        }
-        if(history.length === 0) { list.innerHTML = getEmptyStateHTML('history'); return; }
-        history.forEach(chat => {
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            item.innerHTML = `<div onclick="loadFirebaseChat('${chat.id}')"><div class="history-title">${chat.title}</div><span class="history-date">${new Date(chat.timestamp).toLocaleDateString('ar-EG')}</span></div><i class="fas fa-trash" style="color:#666; font-size:0.8rem; padding:5px;" onclick="deleteFirebaseChat('${chat.id}')"></i>`;
-            list.appendChild(item);
-        });
-    }).catch(() => {
-        const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
-        list.innerHTML = '';
-        if(history.length === 0) { list.innerHTML = getEmptyStateHTML('history'); return; }
-        history.forEach(chat => {
-            const item = document.createElement('div');
-            item.className = 'history-item';
-            item.innerHTML = `<div onclick="loadLocalChat('${chat.id}')"><div class="history-title">${chat.title}</div><span class="history-date">${new Date(chat.timestamp).toLocaleDateString('ar-EG')}</span></div><i class="fas fa-trash" style="color:#666; font-size:0.8rem; padding:5px;" onclick="deleteLocalChat('${chat.id}')"></i>`;
-            list.appendChild(item);
-        });
+    const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
+    list.innerHTML = '';
+    if(history.length === 0) { list.innerHTML = '<p style="color:#666; text-align:center; margin-top:20px;">لا يوجد سجل محادثات</p>'; return; }
+    history.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `<div onclick="loadLocalChat('${chat.id}')"><div class="history-title">${chat.title}</div><span class="history-date">${new Date(chat.timestamp).toLocaleDateString()}</span></div><i class="fas fa-trash" style="color:#666; font-size:0.8rem; padding:5px;" onclick="deleteLocalChat('${chat.id}')"></i>`;
+        list.appendChild(item);
     });
 }
-
-window.loadFirebaseChat = async (id) => {
-    const snap = await get(ref(db, `ai_chats/${currentUser}/${id}`)).catch(() => null);
-    if(snap && snap.exists()) {
-        const chat = snap.val();
-        currentChatId = chat.id; currentChatMessages = chat.messages || []; isIncognito = false;
-        const prefix = selectedRole === 'teacher' ? 't' : 's';
-        document.getElementById(`${prefix}-ai-msgs`).innerHTML = '';
-        currentChatMessages.forEach(msg => { renderMessageUI(prefix, msg.role, msg.content, msg.image); });
-        toggleHistory(false);
-        window.toggleAiSendMic(prefix, document.getElementById(`${prefix}-ai-input`)?.value || '');
-    }
-};
-
-window.deleteFirebaseChat = (id) => {
-    event.stopPropagation();
-    saConfirm("حذف هذه المحادثة من السجل؟", async () => {
-        await remove(ref(db, `ai_chats/${currentUser}/${id}`)).catch(() => {});
-        renderHistoryList();
-        if(currentChatId === id) startNewChat(selectedRole === 'teacher' ? 't' : 's');
-    });
-};
 
 window.loadLocalChat = (id) => {
     const history = JSON.parse(localStorage.getItem(`sa_chat_history_${currentUser}`) || '[]');
@@ -2287,10 +1791,9 @@ window.shareCurrentChat = async () => {
     playSound('click');
     if(currentChatMessages.length === 0) return saAlert("لا يمكن مشاركة محادثة فارغة", "info");
     saAlert("جاري إنشاء رابط للمشاركة...", "info");
-    // Save chat to firebase for sharing
-    const shareRef = ref(db, `shared_chats/${currentChatId}`);
-    await set(shareRef, { author: currentUser, authorUid: myUid, timestamp: Date.now(), messages: currentChatMessages, chatId: currentChatId });
-    const shareLink = `${window.location.href.split('?')[0]}?shareId=${currentChatId}`;
+    const shareRef = push(ref(db, 'shared_chats'));
+    await set(shareRef, { author: currentUser, timestamp: Date.now(), messages: currentChatMessages });
+    const shareLink = `${window.location.href.split('?')[0]}?shareId=${shareRef.key}`;
     navigator.clipboard.writeText(shareLink).then(() => { saAlert("تم نسخ رابط المحادثة! أرسله لمن تريد.", "success"); });
 };
 
@@ -2300,112 +1803,45 @@ window.loadSharedChat = async (shareId, prefix) => {
     const snap = await get(ref(db, `shared_chats/${shareId}`));
     if(snap.exists()) {
         const data = snap.val();
-        currentChatMessages = data.messages || [];
-        // Same user: restore same chatId; different user: new chatId
-        if(data.author === currentUser) {
-            currentChatId = data.chatId || shareId;
-        } else {
-            currentChatId = generateChatId();
-        }
-        isIncognito = false;
-        saveChatToFirebase();
-        msgs.innerHTML = `<div class="shared-chat-banner"><i class="fas fa-share-nodes"></i> محادثة مشاركة من <strong>${data.author || 'مجهول'}</strong> — يمكنك الاستمرار في المحادثة</div>`;
+        currentChatMessages = data.messages || []; currentChatId = generateChatId(); isIncognito = false; saveChatToLocal();
+        msgs.innerHTML = `<div style="text-align:center; background:#222; padding:5px; margin-bottom:10px; font-size:0.8rem; border-radius:10px; color:#aaa;">تم استرجاع محادثة مشاركة من ${data.author || 'مجهول'}</div>`;
         currentChatMessages.forEach(msg => { renderMessageUI(prefix, msg.role, msg.content, msg.image); });
         window.history.replaceState({}, document.title, window.location.pathname);
     } else { saAlert("رابط المشاركة غير صالح أو منتهي", "error"); startNewChat(prefix); }
 };
 
 function formatAiResponseText(text) {
-    if (!text) return '';
-    // Escape HTML
-    let t = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-    // Code blocks first (preserve newlines inside them)
-    const codeBlocks = [];
-    t = t.replace(/```[\s\S]*?```/g, m => {
-        const inner = m.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '');
-        codeBlocks.push(`<div class="ai-code-block"><button class="ai-copy-code-btn" onclick="navigator.clipboard.writeText(this.nextElementSibling.innerText);this.innerHTML='<i class=\\'fas fa-check\\'></i>';setTimeout(()=>this.innerHTML='<i class=\\'fas fa-copy\\'></i>',1500)"><i class="fas fa-copy"></i></button><pre><code>${inner.replace(/\n/g,'<br>')}</code></pre></div>`);
-        return `%%CODE_${codeBlocks.length - 1}%%`;
-    });
-
-    // Inline code
-    t = t.replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>');
-
-    // Bold & italic
-    t = t.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    t = t.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Headings (#, ##, ###)
-    t = t.replace(/^###\s+(.+)$/gm, '<div class="ai-h3">$1</div>');
-    t = t.replace(/^##\s+(.+)$/gm, '<div class="ai-h2">$1</div>');
-    t = t.replace(/^#\s+(.+)$/gm, '<div class="ai-h1">$1</div>');
-
-    // Numbered lists
-    t = t.replace(/^\d+\.\s+(.+)$/gm, '<li class="ai-li-num">$1</li>');
-
-    // Bullet lists
-    t = t.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li class="ai-li-bul">$1</li>');
-
-    // Wrap consecutive li items
-    t = t.replace(/(<li class="ai-li-num">[\s\S]*?<\/li>)(\n?(?=<li class="ai-li-num">)|(?!<li))/g, (m, li) => li);
-    t = t.replace(/(<li class="ai-li-bul">.*?<\/li>\n?)+/g, m => `<ul class="ai-ul">${m}</ul>`);
-    t = t.replace(/(<li class="ai-li-num">.*?<\/li>\n?)+/g, m => `<ol class="ai-ol">${m}</ol>`);
-
-    // Paragraphs: split by double newline
-    const paragraphs = t.split(/\n{2,}/);
-    t = paragraphs.map(p => {
-        p = p.trim();
-        if (!p) return '';
-        // Don't wrap block elements
-        if (p.startsWith('<div') || p.startsWith('<ul') || p.startsWith('<ol') || p.startsWith('<pre') || p.startsWith('%%CODE_')) {
-            return p.replace(/\n/g, ' ');
-        }
-        // Single newlines become spaces (keeps text flowing naturally on mobile)
-        p = p.replace(/\n/g, ' ');
-        return `<p class="ai-p">${p}</p>`;
-    }).filter(Boolean).join('');
-
-    // Restore code blocks
-    codeBlocks.forEach((cb, i) => { t = t.replace(`%%CODE_${i}%%`, cb); });
-
-    return makeLinksClickable(t);
+    if(!text) return '';
+    let safeText = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    safeText = safeText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    safeText = safeText.replace(/```(.*?)```/gs, '<pre><code>$1</code></pre>');
+    safeText = safeText.replace(/`(.*?)`/g, '<code>$1</code>');
+    safeText = safeText.replace(/^\s*-\s+(.*)$/gm, '<li>$1</li>');
+    if(safeText.includes('<li>')) {
+        safeText = safeText.replace(/((<li>.*<\/li>\s*)+)/g, '<ul>$1</ul>');
+    }
+    safeText = safeText.replace(/\n/g, '<br>');
+    return makeLinksClickable(safeText);
 }
 
-function renderMessageUI(prefix, role, text, imgB64, useTypewriter = false) {
+function renderMessageUI(prefix, role, text, imgB64) {
     const msgs = document.getElementById(`${prefix}-ai-msgs`);
     const wrap = document.createElement('div');
     wrap.className = `chat-msg-wrap ${role}`;
 
+    // Add AI avatar for AI messages
     if (role === 'ai') {
-        const avatarDiv = document.createElement('div');
-        avatarDiv.className = 'ai-msg-avatar';
-        avatarDiv.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i>';
-        wrap.appendChild(avatarDiv);
+        const avatar = document.createElement('div');
+        avatar.className = 'ai-msg-avatar';
+        avatar.innerHTML = '<i class="fas fa-wand-magic-sparkles" style="font-size:0.75rem;"></i>';
+        wrap.appendChild(avatar);
     }
 
     const div = document.createElement('div');
     div.className = `chat-msg ${role}`;
 
     if (role === 'ai') {
-        if (useTypewriter && text) {
-            const formattedText = formatAiResponseText(text);
-            div.innerHTML = '';
-            // Typewriter: reveal HTML character by character safely
-            let i = 0;
-            const chars = text.split('');
-            const typeNext = () => {
-                if (i < chars.length) {
-                    i++;
-                    div.innerHTML = formatAiResponseText(text.substring(0, i));
-                    msgs.scrollTop = msgs.scrollHeight;
-                    setTimeout(typeNext, 8);
-                }
-            };
-            typeNext();
-        } else {
-            div.innerHTML = formatAiResponseText(text);
-        }
+        div.innerHTML = formatAiResponseText(text);
     } else {
         div.innerHTML = makeLinksClickable(text);
     }
@@ -2421,24 +1857,18 @@ function renderMessageUI(prefix, role, text, imgB64, useTypewriter = false) {
     if (role === 'ai' && text) {
         const actions = document.createElement('div');
         actions.className = 'msg-ai-actions';
+        let liked = false;
         actions.innerHTML = `
             <button class="msg-action-btn like-btn" title="إعجاب" onclick="this.classList.toggle('liked'); this.querySelector('.like-count').innerText = this.classList.contains('liked') ? '1' : '0';">
                 <i class="ph-bold ph-thumbs-up"></i> <span class="like-count">0</span>
             </button>
-            <button class="msg-action-btn ai-share-btn" title="مشاركة"><i class="ph-bold ph-share-network"></i></button>
-            <button class="msg-action-btn ai-copy-btn" title="نسخ"><i class="ph-bold ph-copy"></i></button>
+            <button class="msg-action-btn" title="مشاركة" onclick="(()=>{ if(navigator.share) navigator.share({text: \`${text.replace(/`/g,"'").substring(0,200)}\`}); else navigator.clipboard.writeText(\`${text.replace(/`/g,"'").substring(0,300)}\`).then(()=>showToast('تم النسخ','','success',2000)); })()">
+                <i class="ph-bold ph-share-network"></i>
+            </button>
+            <button class="msg-action-btn" title="نسخ" onclick="navigator.clipboard.writeText(\`${text.replace(/`/g,"'")}\`).then(()=>showToast('تم نسخ الرد','','success',2000))">
+                <i class="ph-bold ph-copy"></i>
+            </button>
         `;
-        // Use dataset to avoid JS injection in inline handlers
-        const shareBtn = actions.querySelector('.ai-share-btn');
-        const copyBtn = actions.querySelector('.ai-copy-btn');
-        shareBtn.addEventListener('click', () => {
-            const snippet = text.substring(0, 200);
-            if(navigator.share) navigator.share({text: snippet}).catch(()=>{});
-            else navigator.clipboard.writeText(text).then(()=>showToast('تم النسخ','','success',2000));
-        });
-        copyBtn.addEventListener('click', () => {
-            navigator.clipboard.writeText(text).then(()=>showToast('تم نسخ الرد','','success',2000));
-        });
         wrap.appendChild(actions);
     }
 
@@ -2450,8 +1880,7 @@ function loadTeacherTests() {
     const list = document.getElementById('t-tests-list');
     const resultSelect = document.getElementById('t-result-select');
     list.innerHTML = getMultipleSkeletons(3);
-    if (_testsListener) { _testsListener(); _testsListener = null; }
-    _testsListener = onValue(ref(db, 'tests'), (snap) => {
+    onValue(ref(db, 'tests'), (snap) => {
         list.innerHTML = ''; resultSelect.innerHTML = '<option>اختر الاختبار للعرض</option>';
         const data = snap.val() || {};
         let count = 0;
@@ -2477,7 +1906,7 @@ function loadTeacherTests() {
                             <button class="action-icon delete" onclick="deleteTest('${key}')" title="حذف"><i class="fas fa-trash"></i></button>
                         </div>
                     </div>`;
-                list.appendChild(cardWrapper); list.appendChild(createAdBanner());
+                list.appendChild(cardWrapper); { const _ad = createAdBanner(); if (_ad) list.appendChild(_ad); }
             }
         });
         if(count === 0) list.innerHTML = getEmptyStateHTML('exams');
@@ -2497,9 +1926,6 @@ window.setQType = (type, label) => {
     const mcqSection = document.getElementById('mcq-section-wrapper');
     if (type === 'essay') {
         mcqSection.classList.add('hidden');
-        // Essay defaults to 2 points
-        const ptsInput = document.getElementById('q-points');
-        if(ptsInput && ptsInput.value === '1') ptsInput.value = '2';
     } else {
         mcqSection.classList.remove('hidden');
         if(document.getElementById('mcq-options-container').children.length === 0) renderOptionFields();
@@ -2628,7 +2054,6 @@ window.resetCreateForm = () => {
     document.getElementById('new-test-name').value = ''; document.getElementById('new-test-grade').value = ''; document.getElementById('new-test-duration').value = '';
     const subj = document.getElementById('new-test-subject'); if(subj) subj.value = '';
     document.getElementById('custom-grade-input').classList.add('hidden');
-    const customSubjInput = document.getElementById('custom-subject-input'); if(customSubjInput) { customSubjInput.value = ''; customSubjInput.classList.add('hidden'); }
     document.getElementById('create-page-title').innerText = "اختبار جديد";
     document.getElementById('btn-save-test').innerHTML = '<i class="fas fa-save"></i> نشر الاختبار النهائي';
     currentQuestions = []; renderAddedQuestions(); clearQuestionForm(); isEditingMode = false; editingTestId = null;
@@ -2657,8 +2082,7 @@ window.saveTest = async () => {
     const title = document.getElementById('new-test-name').value;
     let grade = document.getElementById('new-test-grade').value; if(grade === 'custom') grade = document.getElementById('custom-grade-input').value;
     const duration = document.getElementById('new-test-duration').value;
-    let subject = document.getElementById('new-test-subject').value;
-    if(subject === 'custom_subject') subject = document.getElementById('custom-subject-input').value.trim();
+    const subject = document.getElementById('new-test-subject').value;
     if(!title || !grade || !duration || !subject || currentQuestions.length === 0) {
         if (!subject) {
             const el = document.getElementById('new-test-subject');
@@ -2675,7 +2099,6 @@ window.saveTest = async () => {
 };
 
 window.checkCustomGrade = (el) => { document.getElementById('custom-grade-input').classList.toggle('hidden', el.value !== 'custom'); };
-window.checkCustomSubject = (el) => { document.getElementById('custom-subject-input').classList.toggle('hidden', el.value !== 'custom_subject'); };
 window.toggleTestVisibility = (k, s) => { playSound('click'); update(ref(db, `tests/${k}`), { isHidden: s }); saAlert(s ? "تم إخفاء الاختبار عن الطلاب" : "الاختبار الآن مرئي للطلاب", "info"); };
 window.deleteTest = (k) => { saConfirm("هل أنت متأكد من حذف هذا الاختبار؟", () => { remove(ref(db, `tests/${k}`)); remove(ref(db, `results/${k}`)); saAlert("تم الحذف بنجاح", "success"); }); };
 
@@ -2701,7 +2124,7 @@ window.loadTestResults = (testId) => {
     const div = document.getElementById('t-results-container'); div.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i></div>';
     get(ref(db, `results/${testId}`)).then(async snap => {
         div.innerHTML = '';
-        if(!snap.exists()) return div.innerHTML = getEmptyStateHTML('results');
+        if(!snap.exists()) return div.innerHTML = '<p style="text-align:center; color:#666;">لا توجد نتائج لهذا الاختبار بعد</p>';
         snap.forEach(c => {
             const studentName = c.key; const v = c.val(); const color = v.percentage >= 50 ? 'var(--success)' : 'var(--danger)';
             const el = document.createElement('div'); el.className = 'mini-card';
@@ -2749,20 +2172,14 @@ window.viewStudentDetails = async (testId, studentName) => {
 function loadStudentExams() {
     const list = document.getElementById('s-exams-list');
     list.innerHTML = getMultipleSkeletons(3);
-    if (_studentExamsListener) { _studentExamsListener(); _studentExamsListener = null; }
-    _studentExamsListener = onValue(ref(db, 'tests'), async (snap) => {
+    onValue(ref(db, 'tests'), async (snap) => {
         list.innerHTML = ''; const tests = snap.val();
         if (!tests) return list.innerHTML = getEmptyStateHTML('exams');
         let foundExam = false;
         const promises = Object.entries(tests).map(async ([key, val]) => {
             if (val.isHidden === true) return null;
-            const resSnap = await get(ref(db, `results/${key}/${currentUser}/latest`)).catch(() => null)
-                || await get(ref(db, `results/${key}/${currentUser}`)).catch(() => null);
-            if (resSnap && resSnap.exists()) {
-                const resVal = resSnap.val();
-                return { key, val, hasTaken: true, score: resVal.percentage != null ? resVal.percentage : null };
-            }
-            return { key, val, hasTaken: false, score: null };
+            const resSnap = await get(ref(db, `results/${key}/${currentUser}`));
+            return { key, val, hasTaken: resSnap.exists(), score: resSnap.exists() ? resSnap.val().percentage : null };
         });
         const results = await Promise.all(promises);
         results.forEach(item => {
@@ -2784,7 +2201,7 @@ function loadStudentExams() {
                     </div>
                     <div class="icon-actions">${buttonsHtml}</div>
                 </div>`;
-            list.appendChild(cardWrapper); list.appendChild(createAdBanner());
+            list.appendChild(cardWrapper); { const _ad = createAdBanner(); if (_ad) list.appendChild(_ad); }
         });
         if(!foundExam) list.innerHTML = getEmptyStateHTML('exams');
     });
@@ -2796,9 +2213,8 @@ window.loadStudentGrades = () => {
         get(ref(db, 'tests')).then(async (testSnap) => {
             list.innerHTML = ''; const tests = testSnap.val() || {}; let foundAny = false;
             for(const [testId, testData] of Object.entries(tests)) {
-            const resSnap = await get(ref(db, `results/${testId}/${currentUser}/latest`)).catch(() => null)
-                || await get(ref(db, `results/${testId}/${currentUser}`)).catch(() => null);
-                if(resSnap && resSnap.exists() && resSnap.val().percentage != null) {
+                const resSnap = await get(ref(db, `results/${testId}/${currentUser}`));
+                if(resSnap.exists()) {
                     foundAny = true; const res = resSnap.val();
                     const color = res.percentage >= 90 ? 'var(--accent-gold)' : (res.percentage >= 50 ? 'var(--success)' : 'var(--danger)');
                     const div = document.createElement('div'); div.className = 'mini-card';
@@ -2849,11 +2265,7 @@ window.startTest = async (id) => {
                 inputHtml = `<textarea class="smart-input" style="min-height:80px; margin-top:10px;" placeholder="اكتب إجابتك هنا..." onchange="saveAns(${i}, this.value)"></textarea>`;
             } else {
                 if (!q.options) q.options = []; const shuffled = [...q.options].sort(() => Math.random() - 0.5);
-                inputHtml = shuffled.map((o, oi) => {
-                    const safeDisplay = String(o).replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    const dataAttr = String(o).replace(/"/g, '&quot;');
-                    return `<label class="mini-card" style="flex-direction:row; align-items:center; gap:10px; cursor:pointer; margin-bottom:8px; padding:12px;"><input type="radio" name="q${i}" data-ans="${dataAttr}" onchange="saveAns(${i}, this.dataset.ans)"><span>${safeDisplay}</span></label>`;
-                }).join('');
+                inputHtml = shuffled.map(o => `<label class="mini-card" style="flex-direction:row; align-items:center; gap:10px; cursor:pointer; margin-bottom:8px; padding:12px;"><input type="radio" name="q${i}" value="${o}" onchange="saveAns(${i}, '${o}')"><span>${o}</span></label>`).join('');
             }
 
             div.innerHTML += `
@@ -2872,136 +2284,54 @@ window.startTest = async (id) => {
 };
 
 window.saveAns = (i, v) => answers[i] = v;
-window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفقد تقدمك.", () => { clearInterval(timerInt); timerInt = null; activeTest = null; answers = {}; document.getElementById('s-taking-test').classList.add('hidden'); }); };
+window.closeExam = () => { saConfirm("خروج من الامتحان؟ ستفقد تقدمك.", () => { clearInterval(timerInt); document.getElementById('s-taking-test').classList.add('hidden'); }); };
 
 window.submitExam = async () => {
     playSound('success');
-    clearInterval(timerInt);
-    let score = 0, total = 0, details = [];
+    clearInterval(timerInt); let score = 0, total = 0, details = [];
     const questions = activeTest.questions || [];
-    const hasEssay = questions.some(q => q.type === 'essay');
-
     questions.forEach((q, i) => {
-        const pts = parseInt(q.points) || 1;
-        total += pts;
+        const pts = parseInt(q.points) || 1; 
+        total += pts; 
+        
         let isCorrect = false;
         if (q.type === 'essay') {
-            // Don't add essay points here - AI will grade later
-            isCorrect = false;
+            if (answers[i] && answers[i].trim().length > 2) {
+                isCorrect = true; 
+                score += pts;
+            }
         } else {
             isCorrect = answers[i] === q.correct;
-            if (isCorrect) score += pts;
+            if(isCorrect) score += pts; 
         }
-        details.push({ q: q.text, image: q.image || null, user: answers[i]||'-', correct: q.correct, isCorrect, type: q.type || 'mcq' });
-    });
-
-    let pct = total === 0 ? 0 : Math.round((score/total)*100);
-
-    if (hasEssay) {
-        const overlay = document.getElementById('exam-grading-overlay');
-        overlay.classList.remove('hidden');
-        try {
-            const essayPromises = questions.map(async (q, i) => {
-                if (q.type !== 'essay' || !answers[i] || answers[i].trim().length < 3) return;
-                const pts = parseInt(q.points) || 2;
-                const aiPrompt = `أنت مصحح اختبار. سؤال مقالي: "${q.text}"\nإجابة الطالب: "${answers[i]}"\nالإجابة النموذجية: "${q.correct || 'غير محددة'}"\n\nقيّم الإجابة من 2 فقط (0 = خطأ كامل، 1 = نصف صح، 2 = صح كامل). أجب برقم فقط: 0 أو 1 أو 2`;
-                try {
-                    const result = await callPollinationsAI([{role:'user', content: aiPrompt}]);
-                    const match = result.match(/[012]/);
-                    const earnedPts = match ? parseInt(match[0]) : (result.includes('صح') || result.includes('correct') ? 2 : 0);
-                    const scaledPts = Math.round((earnedPts / 2) * pts);
-                    score += scaledPts;
-                    details[i].isCorrect = earnedPts >= 1;
-                    details[i].aiGrading = `${earnedPts}/2 — ${result.substring(0, 80)}`;
-                    details[i].earnedPts = scaledPts;
-                } catch(e) {
-                    // On error, give full points if answered
-                    if(answers[i] && answers[i].trim().length > 2) score += pts;
-                }
-            });
-            await Promise.all(essayPromises);
-            pct = total === 0 ? 0 : Math.round((score/total)*100);
-        } catch(e) {}
-        overlay.classList.add('hidden');
-    }
-
-    const attemptKey = `attempt_${Date.now()}`;
-    const resultData = { score, total, percentage: pct, timestamp: Date.now(), details };
-    await set(ref(db, `results/${activeTest.id}/${currentUser}/${attemptKey}`), resultData);
-    await set(ref(db, `results/${activeTest.id}/${currentUser}/latest`), resultData);
-
-    document.getElementById('s-taking-test').classList.add('hidden');
-    showExamResultScreen(pct, score, total, details, activeTest.id);
-    loadStudentExams(); loadStudentGrades();
-};
-
-window.showExamResultScreen = (pct, score, total, details, testId) => {
-    playSound('success');
-    const screen = document.getElementById('s-exam-result');
-    document.getElementById('exam-result-pct').innerText = pct + '%';
-    
-    let gradeColor, gradeTitle, suggestion;
-    if (pct >= 90) { gradeColor = 'var(--accent-gold)'; gradeTitle = 'ممتاز! أداء رائع 🏆'; suggestion = 'استمر في هذا المستوى الرائع وساعد زملاءك.'; }
-    else if (pct >= 75) { gradeColor = 'var(--success)'; gradeTitle = 'جيد جداً! 🌟'; suggestion = 'أنت قريب من التميز، راجع النقاط الضعيفة.'; }
-    else if (pct >= 60) { gradeColor = 'var(--accent-primary)'; gradeTitle = 'جيد 👍'; suggestion = 'مراجعة الدروس مع الأسئلة الخاطئة ستحسّن نتيجتك.'; }
-    else if (pct >= 40) { gradeColor = 'var(--warning)'; gradeTitle = 'مقبول - يحتاج مراجعة 📚'; suggestion = 'ركز على المواد الضعيفة واستشر مساعد الذكاء الاصطناعي.'; }
-    else { gradeColor = 'var(--danger)'; gradeTitle = 'يحتاج مجهود أكبر 💪'; suggestion = 'لا تيأس! راجع الدروس من البداية واطلب المساعدة من المعلم.'; }
-
-    const circle = document.getElementById('exam-result-score-circle');
-    circle.style.borderColor = gradeColor;
-    document.getElementById('exam-result-title').innerText = gradeTitle;
-    document.getElementById('exam-result-title').style.color = gradeColor;
-    document.getElementById('exam-result-suggestion').innerText = suggestion;
-
-    const wrongList = document.getElementById('exam-result-wrong-list');
-    wrongList.innerHTML = '';
-    const wrongQuestions = details.filter(d => !d.isCorrect);
-    if (wrongQuestions.length === 0) {
-        wrongList.innerHTML = '<p style="color:var(--success); text-align:center;"><i class="fas fa-check-circle"></i> أحسنت! لم تخطئ في أي سؤال.</p>';
-    } else {
-        wrongQuestions.forEach((d, i) => {
-            const div = document.createElement('div');
-            div.className = 'mini-card';
-            div.style.borderRight = '4px solid var(--danger)';
-            div.style.marginBottom = '12px';
-            div.innerHTML = `
-                <p style="margin:0 0 8px; font-weight:bold; font-size:0.9rem;"><i class="fas fa-times-circle" style="color:var(--danger);margin-left:5px;"></i>${d.q}</p>
-                <div style="background:rgba(255,255,255,0.05); padding:8px; border-radius:8px; font-size:0.85rem; color:#aaa;">إجابتك: <span style="color:#fff;">${d.user}</span></div>
-                ${d.type !== 'essay' && d.correct ? `<div style="background:rgba(16,185,129,0.1); padding:8px; border-radius:8px; font-size:0.85rem; margin-top:6px; color:var(--success);">الصحيحة: ${d.correct}</div>` : ''}
-            `;
-            wrongList.appendChild(div);
+        
+        details.push({ 
+            q: q.text, 
+            image: q.image || null, 
+            user: answers[i]||'-', 
+            correct: q.correct, 
+            isCorrect,
+            type: q.type || 'mcq'
         });
-    }
-
-    window._lastExamResultTestId = testId;
-    screen.classList.remove('hidden');
-};
-
-window.closeExamResult = () => {
-    document.getElementById('s-exam-result').classList.add('hidden');
-    activeTest = null; answers = {};
-};
-
-window.retryExamFromResult = () => {
-    const testId = window._lastExamResultTestId;
-    document.getElementById('s-exam-result').classList.add('hidden');
-    if (testId) checkPhoneAndStart(testId);
+    });
+    const pct = total === 0 ? 0 : Math.round((score/total)*100);
+    await set(ref(db, `results/${activeTest.id}/${currentUser}`), { score, total, percentage: pct, timestamp: Date.now(), details });
+    saAlert(`تم التسليم! النتيجة التقريبية: ${pct}%`, "success");
+    document.getElementById('s-taking-test').classList.add('hidden'); loadStudentExams(); loadStudentGrades(); 
 };
 
 window.reviewTest = async (id) => {
     playSound('click');
-    const resSnap = await get(ref(db, `results/${id}/${currentUser}/latest`)).catch(() => null)
-        || await get(ref(db, `results/${id}/${currentUser}`)).catch(() => null);
-    if(!resSnap || !resSnap.exists()) return saAlert("لم تقم بهذا الاختبار", "info");
+    const resSnap = await get(ref(db, `results/${id}/${currentUser}`));
+    if(!resSnap.exists()) return saAlert("لم تقم بهذا الاختبار", "info");
     const res = resSnap.val();
-    const pct = res.percentage || 0;
-    const div = document.getElementById('review-content');
-    div.innerHTML = `<h1 style="text-align:center; color:var(--accent-primary); margin-bottom:20px;">${pct}%</h1>`;
+    const div = document.getElementById('review-content'); div.innerHTML = `<h1 style="text-align:center; color:var(--accent-primary); margin-bottom:20px;">${res.percentage}%</h1>`;
     if (res.details && Array.isArray(res.details)) {
         res.details.forEach((d, i) => {
             const isEssay = d.type === 'essay';
             const borderColor = d.isCorrect ? 'var(--success)' : (isEssay ? 'var(--accent-primary)' : 'var(--danger)');
             const icon = d.isCorrect ? '<i class="fas fa-check-circle" style="color:var(--success)"></i>' : (isEssay ? '<i class="fas fa-pen" style="color:var(--accent-primary)"></i>' : '<i class="fas fa-times-circle" style="color:var(--danger)"></i>');
+            
             div.innerHTML += `
                 <div class="mini-card" style="border-right:4px solid ${borderColor}">
                     <div style="display:flex; justify-content:space-between;"><strong>س${i+1}: ${d.q}</strong>${icon}</div>
@@ -3158,56 +2488,72 @@ window.sendAiMsg = async (prefix) => {
         }
     }
     
-    currentChatMessages.push({ role: 'user', content: ocrText ? txt + '\n[صورة مرفقة: ' + ocrText + ']' : txt, image: imgB64 });
+    currentChatMessages.push({ role: 'user', content: txt, image: imgB64 });
     renderMessageUI(prefix, 'user', txt, imgB64);
     input.value = '';
     window.toggleAiSendMic(prefix, '');
-    saveChatToFirebase();
-
-    // Thinking avatar loader
+    saveChatToLocal();
+    
     const loadId = 'loading-' + Date.now();
     const loaderDiv = document.createElement('div');
     loaderDiv.className = 'chat-msg-wrap ai';
     loaderDiv.id = loadId;
+    
+    const isComplex = isComplexQuestion(txt);
+    const thinkingLabel = isComplex ? 
+        '<span class="thinking-label deep"><i class="fas fa-brain" style="color:#d946ef;font-size:0.75rem;"></i> يفكر بعمق...</span>' :
+        '<span class="thinking-label">يفكر...</span>';
+    
     loaderDiv.innerHTML = `
-        <div class="ai-thinking-wrap">
-            <div class="ai-thinking-orb">
-                <div class="ai-orb-ring"></div>
-                <div class="ai-orb-ring ai-orb-ring2"></div>
-                <div class="ai-orb-ring ai-orb-ring3"></div>
-                <i class="fas fa-wand-magic-sparkles ai-orb-icon"></i>
+        <div class="ai-msg-avatar" style="margin-bottom:2px;"><i class="fas fa-wand-magic-sparkles" style="font-size:0.75rem;"></i></div>
+        <div class="gemini-thinking">
+            <div class="thinking-orbit">
+                <div class="thinking-orbit-ring"></div>
+                <div class="thinking-orbit-ring2"></div>
+                <div class="thinking-center-dot"></div>
             </div>
-            <div class="ai-thinking-dots"><span></span><span></span><span></span></div>
-        </div>`;
-    msgs.appendChild(loaderDiv);
+            <div class="thinking-dots">
+                ${thinkingLabel}
+                <div class="thinking-pulse-dots">
+                    <span></span><span></span><span></span>
+                    <div class="thinking-caret"></div>
+                </div>
+            </div>
+        </div>
+    `;
+    msgs.appendChild(loaderDiv); 
     msgs.scrollTop = msgs.scrollHeight;
-
+    
     try {
-        const userFirstName = currentUser ? currentUser.split(' ')[0] : '';
-        const userIcon = localStorage.getItem('sa_icon') || '';
-        const userUid = myUid || '';
-        const roleAr = selectedRole === 'teacher' ? 'معلم' : 'طالب';
+        let finalPrompt = "";
+        
+        // Correct Arabic spelling before sending
+        const correctedTxt = correctArabicSpelling(txt);
+        
+        if(selectedRole === 'student') {
+            finalPrompt += `أنت مساعد دراسي ذكي اسمه SA AI للطلاب. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة والتحيات تحتاج ردود قصيرة (جملة أو اثنتان)، الأسئلة التفسيرية تحتاج شرح متوسط، والأسئلة المعقدة تحتاج إجابة مفصلة. لا تطول إذا السؤال لا يحتاج لذلك. إذا وجدت أخطاء إملائية في السؤال افهمها وأجب عنها بشكل طبيعي دون التنبيه. `;
+        } else {
+            finalPrompt += `أنت مساعد معلمين ذكي اسمه SA AI. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة ردود قصيرة، والأسئلة التفصيلية ردود شاملة. إذا وجدت أخطاء إملائية في السؤال افهمها وأجب عنها بشكل طبيعي. `;
+        }
 
-        const sysContent = selectedRole === 'student'
-            ? `أنت SA AI، مساعد دراسي ذكي تم تصميمه وتطويره بواسطة سيف هاني. أجب بالعربية دائماً. اجعل إجابتك متناسبة مع السؤال: قصيرة للأسئلة البسيطة، مفصلة للمعقدة. استخدم **نص** للتمييز و- للقوائم. منصة SA EDU هي منصة تعليمية متكاملة تضم: مكتبة الاختبارات، دردشة مباشرة، Reese (مجتمع أفكار)، وذكاء اصطناعي. صممها سيف هاني. المستخدم الحالي اسمه "${currentUser}"، ${roleAr}، معرفه ${userUid}.`
-            : `أنت SA AI، مساعد معلمين ذكي تم تصميمه وتطويره بواسطة سيف هاني. أجب بالعربية دائماً. ساعد في إنشاء الاختبارات وتحضير الدروس وتحليل الطلاب. منصة SA EDU تضم: مكتبة الاختبارات، إنشاء اختبارات، نتائج الطلاب، دردشة مباشرة، Reese، وذكاء اصطناعي. صممها سيف هاني. المعلم الحالي اسمه "${currentUser}"، معرفه ${userUid}.`;
-
-        const messages = [
-            { role: 'system', content: sysContent },
-            ...currentChatMessages.slice(-10).map(m => ({ role: m.role === 'ai' ? 'assistant' : 'user', content: m.content }))
-        ];
-
-        const reply = await callPollinationsAI(messages);
-
+        if (ocrText) {
+            finalPrompt += `Context from image: "${ocrText}". `;
+        }
+        finalPrompt += correctedTxt;
+        
+        const reply = await callPollinationsAI(finalPrompt);
+        
         playSound('recv');
-        const loaderEl = document.getElementById(loadId);
-        if (loaderEl) loaderEl.remove();
+        document.getElementById(loadId).remove();
         currentChatMessages.push({ role: 'ai', content: reply, image: null });
-        renderMessageUI(prefix, 'ai', reply, null, true);
-        saveChatToFirebase();
-    } catch (e) {
-        const loaderEl = document.getElementById(loadId);
-        if (loaderEl) loaderEl.innerHTML = '<div class="chat-msg ai" style="color:#ef4444;">⚠️ خطأ في الاتصال. تحقق من الإنترنت وحاول مرة أخرى.</div>';
+        renderMessageUI(prefix, 'ai', reply, null); 
+        saveChatToLocal();
+    } catch (e) { 
+        document.getElementById(loadId).innerHTML = `
+            <div class="ai-msg-avatar"><i class="fas fa-exclamation" style="font-size:0.7rem;color:#ef4444;"></i></div>
+            <div class="chat-msg ai" style="color:#ef4444;">حدث خطأ في الاتصال بالذكاء الاصطناعي.</div>
+        `; 
+        console.error(e);
     }
 };
 
@@ -3411,6 +2757,7 @@ window.openStudentAnalytics = async () => {
     `;
 };
 
+
 const XP_LEVELS = [
     { name: 'مبتدئ', minXP: 0, maxXP: 200, cssClass: 'level-1', icon: '🌱', unlocks: 'اختبارات سهلة' },
     { name: 'متوسط', minXP: 200, maxXP: 600, cssClass: 'level-2', icon: '📘', unlocks: 'تحديات أصعب' },
@@ -3598,7 +2945,7 @@ window.openLeaderboard = async () => {
 
     const snap = await get(ref(db, 'xp_scores'));
     list.innerHTML = '';
-    if (!snap.exists()) { list.innerHTML = getEmptyStateHTML('results'); return; }
+    if (!snap.exists()) { list.innerHTML = '<p style="color:#666; text-align:center;">لا يوجد بيانات بعد</p>'; return; }
 
     const entries = [];
     snap.forEach(child => { entries.push({ name: child.val().name || child.key, xp: child.val().xp || 0 }); });
@@ -3616,7 +2963,7 @@ window.openLeaderboard = async () => {
         `;
         list.appendChild(div);
     });
-    if (entries.length === 0) list.innerHTML = getEmptyStateHTML('results');
+    if (entries.length === 0) list.innerHTML = '<p style="color:#666; text-align:center;">لا يوجد بيانات كافية بعد</p>';
 };
 
 const _origSubmitExam = window.submitExam;
@@ -3662,10 +3009,9 @@ window.startTest = async function(id) {
 
 const savedUser = localStorage.getItem('sa_user'); const savedRole = localStorage.getItem('sa_role'); const savedIcon = localStorage.getItem('sa_icon'); const savedUid = localStorage.getItem('sa_uid');
 if (savedUser && savedRole) {
-    currentUser = savedUser; selectedRole = savedRole; 
-    myUid = (savedUid && savedUid !== 'null' && savedUid !== 'undefined') ? savedUid : null;
+    currentUser = savedUser; selectedRole = savedRole; myUid = savedUid;
     document.getElementById('landing-layer').classList.add('hidden');
-    loginSuccess(currentUser, savedIcon, myUid);
+    loginSuccess(currentUser, savedIcon, savedUid);
 } else { document.getElementById('landing-layer').classList.remove('hidden'); }
 
 let deferredPrompt;
@@ -3700,132 +3046,307 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// =================== SMART EDITOR ===================
-let _editorActivePrefix = null;
+// ======================================================
+// SA EDU — DIRECT VOICE CALL SYSTEM (PeerJS-based)
+// ======================================================
 
-window.editorFormat = (cmd) => { document.execCommand(cmd, false, null); };
-window.editorFontSize = (size) => { document.execCommand('fontSize', false, size); };
-window.editorColor = (color) => { document.execCommand('foreColor', false, color); };
+let _dcPeer = null;
+let _dcLocalStream = null;
+let _dcRemoteConn = null;
+let _dcCallTimer = null;
+let _dcSeconds = 0;
+let _dcMuted = false;
+let _dcActiveCallId = null;
+let _dcCallerData = null;
 
-window.editorInsertImage = () => {
-    const prefix = selectedRole === 'teacher' ? 't' : 's';
-    _editorActivePrefix = prefix;
-    document.getElementById(`${prefix}-editor-img-input`).click();
-};
-
-window.editorHandleImage = async (input) => {
-    if (!input.files || !input.files[0]) return;
-    const prefix = _editorActivePrefix || (selectedRole === 'teacher' ? 't' : 's');
-    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
-    const activePage = pagesEl.querySelector('.editor-page:focus') || pagesEl.querySelector('.editor-page:last-child');
-    const b64 = await getBase64(input.files[0]);
-    const img = document.createElement('img');
-    img.src = b64;
-    img.style.cssText = 'max-width:100%; border-radius:8px; margin:10px 0; cursor:pointer; resize:both; display:block;';
-    img.onclick = () => { const cur = img.style.width === '100%' ? '60%' : '100%'; img.style.width = cur; };
-    if (activePage) { activePage.focus(); activePage.appendChild(img); } else { pagesEl.lastElementChild.appendChild(img); }
-    input.value = '';
-};
-
-window.editorAddPage = () => {
-    const prefix = selectedRole === 'teacher' ? 't' : 's';
-    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
-    const newPage = document.createElement('div');
-    const pageNum = pagesEl.children.length + 1;
-    newPage.className = 'editor-page';
-    newPage.contentEditable = 'true';
-    newPage.dir = 'rtl';
-    newPage.dataset.page = pageNum;
-    pagesEl.appendChild(newPage);
-    newPage.focus();
-    showToast(`صفحة ${pageNum}`, 'تمت الإضافة', 'success', 1500);
-};
-
-window.editorSave = () => {
-    const prefix = selectedRole === 'teacher' ? 't' : 's';
-    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
-    const content = Array.from(pagesEl.children).map(p => p.innerHTML);
-    localStorage.setItem(`sa_editor_${currentUser}`, JSON.stringify(content));
-    showToast('تم الحفظ', '', 'success', 1500);
-};
-
-window.editorExportPDF = () => {
-    const prefix = selectedRole === 'teacher' ? 't' : 's';
-    const pagesEl = document.getElementById(`${prefix}-editor-pages`);
-    const win = window.open('', '_blank');
-    win.document.write(`<!DOCTYPE html><html dir="rtl"><head><meta charset="UTF-8"><style>body{font-family:Cairo,sans-serif;background:#fff;color:#000;padding:40px;} img{max-width:100%;} .page{page-break-after:always;margin-bottom:40px;min-height:297mm;}</style></head><body>`);
-    Array.from(pagesEl.children).forEach(p => { win.document.write(`<div class="page">${p.innerHTML}</div>`); });
-    win.document.write('</body></html>');
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); }, 500);
-};
-
-function loadEditorContent(prefix) {
-    const saved = localStorage.getItem(`sa_editor_${currentUser}`);
-    if (!saved) return;
-    try {
-        const content = JSON.parse(saved);
-        const pagesEl = document.getElementById(`${prefix}-editor-pages`);
-        pagesEl.innerHTML = '';
-        content.forEach((html, i) => {
-            const page = document.createElement('div');
-            page.className = 'editor-page';
-            page.contentEditable = 'true';
-            page.dir = 'rtl';
-            page.dataset.page = i + 1;
-            page.innerHTML = html;
-            pagesEl.appendChild(page);
-        });
-    } catch(e) {}
+function getDCPeer() {
+    if (_dcPeer && !_dcPeer.destroyed) return _dcPeer;
+    const peerId = 'sa-edu-' + myUid;
+    _dcPeer = new Peer(peerId, {
+        debug: 0,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        }
+    });
+    _dcPeer.on('call', (incomingCall) => {
+        // Incoming call notification via Firebase
+        // incomingCall.metadata has caller info
+        const meta = incomingCall.metadata || {};
+        showIncomingCallNotification(meta.callerName || '...', meta.callerIcon || 'fa-user', incomingCall);
+    });
+    _dcPeer.on('error', (err) => { console.error('PeerJS error:', err); });
+    return _dcPeer;
 }
 
-// Load editor when switching to editor tab
-const _origSwitchTab = window.switchTab;
-window.switchTab = function(tabId, btn) {
-    _origSwitchTab.call(this, tabId, btn);
-    if (tabId.endsWith('-editor')) {
-        const prefix = tabId.charAt(0);
-        setTimeout(() => loadEditorContent(prefix), 100);
+window.startDirectCall = async (targetUid, targetName, targetIcon) => {
+    if (!targetUid || targetUid === myUid) return;
+    _callTargetUid = targetUid;
+    _callTargetName = targetName;
+    _callTargetIcon = targetIcon || 'fa-user';
+    
+    try {
+        _dcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch(e) {
+        saAlert('يرجى السماح بالوصول للمايكروفون.', 'error');
+        return;
     }
+    
+    const peer = getDCPeer();
+    const targetPeerId = 'sa-edu-' + targetUid;
+    
+    // Notify target via Firebase signaling
+    const callSignalRef = ref(db, `call_signals/${targetUid}`);
+    await set(callSignalRef, {
+        callerUid: myUid,
+        callerName: currentUser,
+        callerIcon: localStorage.getItem('sa_icon') || 'fa-user-astronaut',
+        callerPeerId: peer.id,
+        timestamp: Date.now()
+    });
+    
+    // Show calling UI
+    showCallOverlay(targetName, targetIcon, 'calling');
+    
+    // Actually call via PeerJS
+    try {
+        _dcRemoteConn = peer.call(targetPeerId, _dcLocalStream, {
+            metadata: { callerName: currentUser, callerIcon: localStorage.getItem('sa_icon') || 'fa-user-astronaut' }
+        });
+        
+        if (_dcRemoteConn) {
+            _dcRemoteConn.on('stream', (remoteStream) => {
+                const audio = document.getElementById('direct-call-remote-audio');
+                if (audio) { audio.srcObject = remoteStream; }
+                onCallConnected();
+            });
+            _dcRemoteConn.on('close', () => { endDirectCall(); });
+            _dcRemoteConn.on('error', (e) => { console.error(e); endDirectCall(); });
+        }
+    } catch(e) { 
+        console.error(e);
+        saAlert('تعذر بدء المكالمة.', 'error');
+        endDirectCall();
+    }
+    
+    // Auto-cancel after 30s if not answered
+    setTimeout(() => {
+        if (_dcRemoteConn && !_dcRemoteConn.open) { endDirectCall(); }
+    }, 30000);
 };
 
-// =================== PROFILE DEEPLINK PREVIEW ===================
-const _origHandleDeepLinks = window.handleDeepLinks;
-window.handleDeepLinks = async function() {
-    const params = new URLSearchParams(window.location.search);
-    const chatUid = params.get('chat');
+function showIncomingCallNotification(callerName, callerIcon, incomingCall) {
+    _dcCallerData = incomingCall;
     
-    if (chatUid && chatUid !== myUid && currentUser) {
-        let foundUser = null, foundRole = '';
-        try {
-            const sSnap = await get(ref(db, 'users/students'));
-            if (sSnap?.exists()) { Object.entries(sSnap.val()).forEach(([n, d]) => { if (d?.uid === chatUid) { foundUser = {name:n,...d}; foundRole='student'; } }); }
-            if (!foundUser) {
-                const tSnap = await get(ref(db, 'users/teachers'));
-                if (tSnap?.exists()) { Object.entries(tSnap.val()).forEach(([n, d]) => { if (d?.uid === chatUid) { foundUser = {name:n,...d}; foundRole='teacher'; } }); }
-            }
-        } catch(e) {}
+    // Show toast notification
+    const toast = document.getElementById('call-toast-banner');
+    const toastAvatar = document.getElementById('call-toast-avatar');
+    const toastName = document.getElementById('call-toast-name');
+    if (toast) {
+        toastAvatar.innerHTML = `<i class="fas ${callerIcon}"></i>`;
+        toastName.textContent = callerName;
+        toast.classList.add('show');
+    }
+    
+    // Also show overlay
+    showCallOverlay(callerName, callerIcon, 'incoming');
+    
+    // Auto-reject after 25s
+    setTimeout(() => {
+        if (_dcCallerData) { 
+            toast?.classList.remove('show');
+            hideCallOverlay();
+        }
+    }, 25000);
+}
 
-        if (foundUser) {
-            const modal = document.getElementById('profile-deeplink-modal');
-            const color = foundRole === 'teacher' ? 'var(--accent-gold)' : 'var(--accent-primary)';
-            const avatar = document.getElementById('pdl-avatar');
-            avatar.innerHTML = `<i class="fas ${foundUser.icon || 'fa-user'}"></i>`;
-            avatar.style.color = color; avatar.style.borderColor = color;
-            document.getElementById('pdl-name').innerText = foundUser.name;
-            document.getElementById('pdl-role').innerText = foundRole === 'teacher' ? 'معلم' : 'طالب';
-            document.getElementById('pdl-chat-btn').onclick = () => {
-                modal.classList.add('hidden');
-                const prefix = selectedRole === 'teacher' ? 't' : 's';
-                switchTab(`${prefix}-dardasha`);
-                setTimeout(() => startChatWithUser(foundUser.name, foundUser.icon, foundUser.uid), 400);
-            };
-            modal.classList.remove('hidden');
-            hideDeepLinkLoader();
-            return;
+function showCallOverlay(name, icon, mode) {
+    const overlay = document.getElementById('direct-call-overlay');
+    const avatarEl = document.getElementById('call-overlay-avatar');
+    const nameEl = document.getElementById('call-overlay-name');
+    const statusEl = document.getElementById('call-overlay-status');
+    const acceptBtn = document.getElementById('call-accept-btn');
+    const muteRow = document.getElementById('call-mute-row');
+    
+    if (!overlay) return;
+    if (avatarEl) avatarEl.innerHTML = `<i class="fas ${icon}"></i>`;
+    if (nameEl) nameEl.textContent = name;
+    
+    if (mode === 'calling') {
+        if (statusEl) statusEl.textContent = 'جاري الاتصال...';
+        if (acceptBtn) acceptBtn.style.display = 'none';
+        if (muteRow) muteRow.style.display = 'none';
+    } else if (mode === 'incoming') {
+        if (statusEl) statusEl.textContent = 'مكالمة واردة...';
+        if (acceptBtn) acceptBtn.style.display = 'flex';
+        if (muteRow) muteRow.style.display = 'none';
+    }
+    
+    overlay.classList.add('show');
+    overlay.classList.remove('in-call');
+}
+
+function hideCallOverlay() {
+    const overlay = document.getElementById('direct-call-overlay');
+    if (overlay) overlay.classList.remove('show', 'in-call');
+}
+
+function onCallConnected() {
+    const overlay = document.getElementById('direct-call-overlay');
+    const statusEl = document.getElementById('call-overlay-status');
+    const muteRow = document.getElementById('call-mute-row');
+    
+    if (overlay) overlay.classList.add('in-call');
+    if (statusEl) statusEl.textContent = 'متصل';
+    if (muteRow) muteRow.style.display = 'flex';
+    
+    // Hide toast
+    document.getElementById('call-toast-banner')?.classList.remove('show');
+    
+    // Start timer
+    _dcSeconds = 0;
+    _dcCallTimer = setInterval(() => {
+        _dcSeconds++;
+        const m = Math.floor(_dcSeconds / 60);
+        const s = _dcSeconds % 60;
+        const timerEl = document.getElementById('call-duration-timer');
+        if (timerEl) timerEl.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    }, 1000);
+}
+
+window.acceptDirectCall = async () => {
+    document.getElementById('call-toast-banner')?.classList.remove('show');
+    
+    if (_dcCallerData) {
+        // Incoming call from PeerJS
+        try {
+            _dcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            _dcCallerData.answer(_dcLocalStream);
+            _dcRemoteConn = _dcCallerData;
+            _dcCallerData = null;
+            
+            _dcRemoteConn.on('stream', (remoteStream) => {
+                const audio = document.getElementById('direct-call-remote-audio');
+                if (audio) { audio.srcObject = remoteStream; }
+                onCallConnected();
+            });
+            _dcRemoteConn.on('close', () => { endDirectCall(); });
+        } catch(e) {
+            saAlert('يرجى السماح بالوصول للمايكروفون.', 'error');
+            hideCallOverlay();
         }
     }
-    
-    if (_origHandleDeepLinks) return _origHandleDeepLinks.call(this);
 };
+
+window.rejectOrEndDirectCall = () => {
+    document.getElementById('call-toast-banner')?.classList.remove('show');
+    _dcCallerData = null;
+    endDirectCall();
+};
+
+function endDirectCall() {
+    if (_dcCallTimer) { clearInterval(_dcCallTimer); _dcCallTimer = null; }
+    if (_dcRemoteConn) { try { _dcRemoteConn.close(); } catch(e) {} _dcRemoteConn = null; }
+    if (_dcLocalStream) { _dcLocalStream.getTracks().forEach(t => t.stop()); _dcLocalStream = null; }
+    const audio = document.getElementById('direct-call-remote-audio');
+    if (audio) { audio.srcObject = null; }
+    hideCallOverlay();
+    _dcCallerData = null;
+    _dcSeconds = 0;
+}
+
+window.toggleCallMute = () => {
+    _dcMuted = !_dcMuted;
+    if (_dcLocalStream) {
+        _dcLocalStream.getAudioTracks().forEach(t => { t.enabled = !_dcMuted; });
+    }
+    const btn = document.getElementById('call-mute-btn');
+    if (btn) {
+        btn.classList.toggle('active', _dcMuted);
+        btn.innerHTML = _dcMuted ? '<i class="ph-bold ph-microphone-slash"></i>' : '<i class="ph-bold ph-microphone"></i>';
+    }
+};
+
+window.toggleCallSpeaker = () => {
+    const btn = document.getElementById('call-speaker-btn');
+    if (btn) btn.classList.toggle('active');
+};
+
+// Listen for incoming call signals via Firebase
+function listenForCallSignals() {
+    if (!myUid) return;
+    const signalRef = ref(db, `call_signals/${myUid}`);
+    onValue(signalRef, async (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.val();
+        // Only process recent signals (within 30s)
+        if (Date.now() - data.timestamp > 30000) { await remove(signalRef); return; }
+        
+        // Show incoming call notification
+        showIncomingCallNotification(data.callerName, data.callerIcon, null);
+        
+        // Wait for PeerJS incoming call event
+        // Clean signal
+        await remove(signalRef);
+    });
+}
+
+// Attach call signal listener after login
+const _origLoginSuccess = loginSuccess;
+// We can't easily override loginSuccess, so we'll call it in the existing listener.
+// Add to initVoiceModule callback or after initialization:
+
+// Watch for Firebase call signals
+const _watchCallsInterval = setInterval(() => {
+    if (myUid && db) {
+        listenForCallSignals();
+        clearInterval(_watchCallsInterval);
+    }
+}, 1000);
+
+
+// ======================================================
+// SA EDU — HERO SECTION UPDATES
+// ======================================================
+
+function updateHeroSections() {
+    const icon = localStorage.getItem('sa_icon') || 'fa-user-astronaut';
+    
+    if (selectedRole === 'teacher') {
+        const heroAvatar = document.getElementById('teacher-hero-avatar');
+        const heroName = document.getElementById('teacher-hero-name');
+        if (heroAvatar) { 
+            heroAvatar.innerHTML = `<i class="fas ${icon}"></i>`;
+            heroAvatar.style.color = 'var(--accent-gold)';
+            heroAvatar.style.borderColor = 'var(--accent-gold)';
+        }
+        if (heroName) heroName.textContent = currentUser?.split(' ')[0] || 'المعلم';
+    } else {
+        const heroAvatar = document.getElementById('student-hero-avatar');
+        const heroName = document.getElementById('student-hero-name');
+        if (heroAvatar) {
+            heroAvatar.innerHTML = `<i class="fas ${icon}"></i>`;
+        }
+        if (heroName) heroName.textContent = currentUser?.split(' ')[0] || 'الطالب';
+    }
+}
+
+// Update heroes when tab switches
+const _origSwitchTab = window.switchTab;
+window.switchTab = (tabId, btn) => {
+    _origSwitchTab(tabId, btn);
+    setTimeout(updateHeroSections, 100);
+    setTimeout(() => {
+        const xpCount = document.getElementById('xp-total-count');
+        const heroXp = document.getElementById('student-hero-xp');
+        if (xpCount && heroXp) heroXp.textContent = xpCount.textContent + ' XP';
+    }, 500);
+};
+
+// Update exam count for teacher hero
+function updateTeacherExamCount(count) {
+    const el = document.getElementById('teacher-exam-count');
+    if (el) el.textContent = count;
+}
