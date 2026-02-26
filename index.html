@@ -28,6 +28,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
     <link rel="stylesheet" href="style.css">
+    
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <script type="application/ld+json">
     {
@@ -146,19 +147,9 @@
                     </div>
                     <div style="color: #666; position:relative; z-index:2;"><i class="fas fa-chevron-left"></i></div>
                 </div>
-                <div class="search-wrap-enhanced">
-                    <div class="search-glow"></div>
-                    <div class="search-inner" style="position:relative;">
-                        <i class="fas fa-search search-icon-animated"></i>
-                        <input type="text" class="google-bar" id="t-search" placeholder="ابحث في اختباراتك...">
-                    </div>
-                    <div class="search-categories">
-                        <div class="search-cat-chip" onclick="filterExamsBySubject('رياضيات')">📐 رياضيات</div>
-                        <div class="search-cat-chip" onclick="filterExamsBySubject('علوم')">🔬 علوم</div>
-                        <div class="search-cat-chip" onclick="filterExamsBySubject('عربي')">📖 عربي</div>
-                        <div class="search-cat-chip" onclick="filterExamsBySubject('إنجليزي')">🇬🇧 إنجليزي</div>
-                        <div class="search-cat-chip" onclick="filterExamsBySubject('تاريخ')">📜 تاريخ</div>
-                    </div>
+                <div class="search-wrap">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" class="google-bar" id="t-search" placeholder="ابحث في اختباراتك...">
                 </div>
                 <div id="t-tests-list"></div>
             </section>
@@ -350,20 +341,32 @@
         <div class="portal-container">
             <section id="s-exams" class="app-section">
                 <div class="mobile-spacer"></div>
-                <div class="search-wrap-enhanced">
-                    <div class="search-glow"></div>
-                    <div class="search-inner" style="position:relative;">
-                        <i class="fas fa-search search-icon-animated"></i>
-                        <input type="text" class="google-bar" id="s-search" placeholder="ابحث عن اختبار...">
+                <div id="xp-hud" class="xp-hud">
+                    <div class="xp-hud-top">
+                        <div class="xp-level-badge" id="xp-level-badge">
+                            <i class="fas fa-star"></i> <span id="xp-level-name">مبتدئ</span>
+                        </div>
+                        <div class="xp-streak" id="xp-streak-display">
+                            <i class="fas fa-fire" style="color:#f97316;"></i> <span id="xp-streak-count">0</span> يوم
+                        </div>
+                        <div class="xp-total" id="xp-total-display">
+                            <i class="fas fa-bolt" style="color:var(--accent-gold);"></i> <span id="xp-total-count">0</span> XP
+                        </div>
                     </div>
-                    <div class="search-categories">
-                        <div class="search-cat-chip" onclick="filterStudentExams('رياضيات')">📐 رياضيات</div>
-                        <div class="search-cat-chip" onclick="filterStudentExams('علوم')">🔬 علوم</div>
-                        <div class="search-cat-chip" onclick="filterStudentExams('عربي')">📖 عربي</div>
-                        <div class="search-cat-chip" onclick="filterStudentExams('إنجليزي')">🇬🇧 إنجليزي</div>
-                        <div class="search-cat-chip" onclick="filterStudentExams('فيزياء')">⚡ فيزياء</div>
-                        <div class="search-cat-chip" onclick="filterStudentExams('كيمياء')">🧪 كيمياء</div>
+                    <div class="xp-daily-goal-wrap">
+                        <div class="xp-daily-goal-label">
+                            <span>هدف اليوم</span>
+                            <span id="xp-daily-label">0 / 50 XP</span>
+                        </div>
+                        <div class="xp-daily-bar">
+                            <div class="xp-daily-fill" id="xp-daily-fill" style="width:0%"></div>
+                        </div>
                     </div>
+                    <div class="xp-badges-row" id="xp-badges-row"></div>
+                </div>
+                <div class="search-wrap">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" class="google-bar" id="s-search" placeholder="ابحث عن اختبار...">
                 </div>
                 <div class="create-exam-cta student-stats-cta" onclick="openStudentAnalytics()">
                     <i class="fas fa-chart-line cta-bg-icon"></i>
@@ -721,50 +724,6 @@
     <div id="sa-toast-container"></div>
 
     <div id="tab-dots" class="tab-dots hidden"></div>
-    <div class="swipe-progress-bar" id="swipe-progress-bar"></div>
-
-    <!-- ============ DIRECT VOICE CALL OVERLAY ============ -->
-    <div id="direct-call-overlay">
-        <div class="call-avatar-ring" id="call-overlay-avatar">
-            <i class="fas fa-user-graduate"></i>
-        </div>
-        <div class="call-name-text" id="call-overlay-name">...</div>
-        <div class="call-status-text" id="call-overlay-status">مكالمة واردة...</div>
-        <div class="call-duration-timer" id="call-duration-timer">0:00</div>
-        <div class="call-mute-row" id="call-mute-row" style="display:none">
-            <button class="call-mute-btn" id="call-mute-btn" onclick="toggleCallMute()">
-                <i class="ph-bold ph-microphone"></i>
-            </button>
-            <button class="call-mute-btn" id="call-speaker-btn" onclick="toggleCallSpeaker()">
-                <i class="ph-bold ph-speaker-high"></i>
-            </button>
-        </div>
-        <div class="call-actions">
-            <button class="call-action-btn accept" id="call-accept-btn" onclick="acceptDirectCall()">
-                <i class="ph-bold ph-phone"></i>
-            </button>
-            <button class="call-action-btn reject" onclick="rejectOrEndDirectCall()">
-                <i class="ph-bold ph-phone-disconnect"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- ============ INCOMING CALL TOAST ============ -->
-    <div class="call-toast" id="call-toast-banner">
-        <div class="call-toast-avatar" id="call-toast-avatar"><i class="fas fa-user"></i></div>
-        <div class="call-toast-info">
-            <div class="call-toast-name" id="call-toast-name">...</div>
-            <div class="call-toast-sub">مكالمة صوتية واردة...</div>
-        </div>
-        <div class="call-toast-btns">
-            <button class="call-toast-btn rej" onclick="rejectOrEndDirectCall()"><i class="ph-bold ph-phone-disconnect"></i></button>
-            <button class="call-toast-btn ans" onclick="acceptDirectCall()"><i class="ph-bold ph-phone"></i></button>
-        </div>
-    </div>
-
-    <!-- Remote audio for direct calls -->
-    <audio id="direct-call-remote-audio" autoplay></audio>
-    <!-- ============ END DIRECT VOICE CALL ============ -->
 
     <script>
     function toggleAiSendMic(role, value) {
@@ -925,5 +884,6 @@
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
+    <script type="module" src="script_v2_additions.js"></script>
 </body>
 </html>
