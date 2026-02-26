@@ -114,24 +114,28 @@ function initSwipeNavigation(portalId) {
             _swipeStartTarget.closest('input') ||
             _swipeStartTarget.closest('textarea') ||
             _swipeStartTarget.closest('.full-screen-overlay') ||
-            _swipeStartTarget.closest('.ai-messages')
+            _swipeStartTarget.closest('.ai-messages') ||
+            _swipeStartTarget.closest('.vr-room-screen') ||
+            _swipeStartTarget.closest('#voice-call-screen')
         )) return;
         
         const dx = e.changedTouches[0].clientX - _swipeStartX;
         const dy = e.changedTouches[0].clientY - _swipeStartY;
         
-        if (Math.abs(dx) < 70 || Math.abs(dx) <= Math.abs(dy) * 1.5) return;
+        // More sensitive: 55px and 2:1 ratio
+        if (Math.abs(dx) < 55 || Math.abs(dx) <= Math.abs(dy) * 2) return;
         
         const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
         const currentHash = window.location.hash.replace('#', '');
         let idx = tabs.indexOf(currentHash);
         if (idx === -1) idx = 0;
         
-        const newIdx = dx > 0 ? idx + 1 : idx - 1;
+        // RTL: swipe right = previous tab, swipe left = next tab
+        const newIdx = dx < 0 ? idx + 1 : idx - 1;
         
         if (newIdx >= 0 && newIdx < tabs.length) {
             const navBtns = document.querySelectorAll(`#${portalId} .nav-btn`);
-            const direction = dx > 0 ? 'left' : 'right';
+            const direction = dx < 0 ? 'right' : 'left';
             switchTabWithDirection(tabs[newIdx], navBtns[newIdx], direction);
         }
     }, { passive: true });
@@ -144,35 +148,17 @@ function switchTabWithDirection(tabId, btn, direction) {
     
     switchTab(tabId, btn);
     
-    section.classList.add(direction === 'right' ? 'section-enter' : 'section-enter-left');
+    // Smooth swipe animation
+    section.classList.add(direction === 'right' ? 'swipe-enter-left' : 'swipe-enter-right');
     setTimeout(() => {
-        section.classList.remove('section-enter', 'section-enter-left');
-    }, 300);
+        section.classList.remove('swipe-enter-right', 'swipe-enter-left', 'section-enter', 'section-enter-left');
+    }, 350);
 }
 
-function updateTabDots(activeTabId) {
-    const dotsContainer = document.getElementById('tab-dots');
-    if (!dotsContainer) return;
-    
-    const tabs = selectedRole === 'teacher' ? TEACHER_TABS : STUDENT_TABS;
-    dotsContainer.innerHTML = '';
-    
-    tabs.forEach((tab, idx) => {
-        const dot = document.createElement('div');
-        dot.className = 'tab-dot' + (tab === activeTabId ? ' active' : '');
-        dotsContainer.appendChild(dot);
-    });
-}
-
-function showTabDots() {
-    const dotsContainer = document.getElementById('tab-dots');
-    if (dotsContainer) dotsContainer.classList.remove('hidden');
-}
-
-function hideTabDots() {
-    const dotsContainer = document.getElementById('tab-dots');
-    if (dotsContainer) dotsContainer.classList.add('hidden');
-}
+// Tab dots replaced by nav underline strip - no-ops kept for compatibility
+function updateTabDots(activeTabId) { /* removed - using CSS nav strip */ }
+function showTabDots() { /* removed */ }
+function hideTabDots() { /* removed */ }
 
 window.addEventListener('click', function(e) {
     const searchModal = document.getElementById('user-search-modal');
@@ -337,17 +323,38 @@ window.saConfirm = (msg, onConfirm) => {
 
 window.closeSaAlert = () => { playSound('click'); document.getElementById('sa-custom-alert').classList.remove('active'); };
 
+// Smart native-style ad banners - non-intrusive, shown every 3rd item
+let _adCounter = 0;
+const _smartAds = [
+    { icon: '📚', title: 'SA Premium للمعلمين', sub: 'اشرح أكثر، إدّر أسرع، وفّر وقتك', cta: 'تعرف أكثر' },
+    { icon: '🎯', title: 'تحديات مع أصدقائك', sub: 'تنافس مع زملائك في الاختبارات', cta: 'ابدأ الآن' },
+    { icon: '🤖', title: 'SA AI Pro', sub: 'ذكاء اصطناعي لا حدود له في دراستك', cta: 'جرّب مجاناً' },
+    { icon: '📱', title: 'حمّل تطبيق SA EDU', sub: 'تجربة أسرع وأسهل على هاتفك', cta: 'تحميل' },
+];
+
 function createAdBanner() {
-    const container = document.createElement('div'); container.className = 'ad-banner';
+    _adCounter++;
+    // Show ad only every 3rd call
+    if (_adCounter % 3 !== 0) return document.createDocumentFragment();
+    
+    const ad = _smartAds[Math.floor(Math.random() * _smartAds.length)];
+    const container = document.createElement('div');
+    container.className = 'smart-ad-banner';
+    container.innerHTML = `
+        <div class="smart-ad-icon">${ad.icon}</div>
+        <div class="smart-ad-content">
+            <div class="smart-ad-title">${ad.title}</div>
+            <div class="smart-ad-sub">${ad.sub}</div>
+        </div>
+        <div class="smart-ad-cta">${ad.cta}</div>
+    `;
+    // Also load real ad in iframe behind the scenes
     const iframe = document.createElement('iframe');
-    iframe.style.width = '468px'; iframe.style.height = '60px'; iframe.style.border = 'none';
-    iframe.style.overflow = 'hidden'; iframe.style.maxWidth = '100%'; 
-    const adContent = `<html><body style="margin:0;padding:0;background:transparent;display:flex;justify-content:center;align-items:center;"><script async>atOptions={'key':'e0f63746bfceb42ce1134aaff1b6709d','format':'iframe','height':60,'width':468,'params':{}};<\/script><script async src="https://www.highperformanceformat.com/e0f63746bfceb42ce1134aaff1b6709d/invoke.js"><\/script></body></html>`;
+    iframe.style.cssText = 'position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;';
+    const adContent = `<html><body style="margin:0"><script async>atOptions={'key':'e0f63746bfceb42ce1134aaff1b6709d','format':'iframe','height':60,'width':468,'params':{}};<\/script><script async src="https://www.highperformanceformat.com/e0f63746bfceb42ce1134aaff1b6709d/invoke.js"><\/script></body></html>`;
+    container.style.position = 'relative';
     container.appendChild(iframe);
-    setTimeout(() => { 
-        const doc = iframe.contentWindow.document; 
-        doc.open(); doc.write(adContent); doc.close(); 
-    }, 50);
+    setTimeout(() => { try { const doc = iframe.contentWindow.document; doc.open(); doc.write(adContent); doc.close(); } catch(e) {} }, 100);
     return container;
 }
 
@@ -478,9 +485,22 @@ function loginSuccess(name, icon, uid) {
     initDardasha();
     initVoiceModule(db, currentUser, myUid);
     
+    // Init voice call peer
+    setTimeout(() => vcInit(), 800);
+    
     initKeyboardFix();
     
     handleDeepLinksAndRouting();
+    
+    // Inject avatar headers
+    const _firstName = currentUser.split(' ')[0];
+    setTimeout(() => {
+        if (selectedRole === 'teacher') {
+            injectSectionAvatarHeader('t-library', 'مرحباً الأستاذ ' + _firstName, 'اختباراتك المنشورة');
+        } else {
+            injectSectionAvatarHeader('s-exams', 'مرحباً ' + _firstName, 'الاختبارات المتاحة');
+        }
+    }, 400);
     
     showTabDots();
     const defaultTab = selectedRole === 'teacher' ? 't-library' : 's-exams';
@@ -2409,25 +2429,105 @@ window.sendAiMsg = async (prefix) => {
     
     const loadId = 'loading-' + Date.now();
     const loaderDiv = document.createElement('div');
-    loaderDiv.className = 'chat-msg ai'; 
+    loaderDiv.className = 'chat-msg-wrap ai'; 
     loaderDiv.id = loadId; 
-    loaderDiv.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+    
+    // Detect if complex question (more than 15 words or contains complex keywords)
+    const isComplex = txt.split(' ').length > 12 || 
+        /اشرح|حلل|قارن|ناقش|لماذا|كيف|explain|analyze|compare|discuss|why|how|detail/i.test(txt);
+    
+    if (isComplex) {
+        loaderDiv.innerHTML = `
+            <div class="gemini-deep-think">
+                <div class="deep-think-header">
+                    <div class="deep-think-ring">
+                        <svg viewBox="0 0 28 28">
+                            <circle cx="14" cy="14" r="10" stroke="#d946ef" stroke-dasharray="50 15"/>
+                            <circle cx="14" cy="14" r="6" stroke="#3b82f6" stroke-dasharray="25 15" style="animation-direction:reverse;animation-duration:1.5s"/>
+                        </svg>
+                    </div>
+                    <span>SA AI يفكر بعمق...</span>
+                </div>
+                <div class="deep-think-steps" id="steps-${loadId}">
+                    <div class="deep-think-step" style="animation-delay:0.1s"><i class="fas fa-circle-dot"></i> يحلل سؤالك</div>
+                </div>
+            </div>`;
+        // Progressively add steps
+        const stepsEl = () => document.getElementById(`steps-${loadId}`);
+        const addStep = (text, delay) => setTimeout(() => {
+            const el = stepsEl();
+            if (!el) return;
+            const s = document.createElement('div');
+            s.className = 'deep-think-step';
+            s.style.animationDelay = '0s';
+            s.innerHTML = `<i class="fas fa-circle-dot"></i> ${text}`;
+            el.appendChild(s);
+        }, delay);
+        addStep('يبحث في المعرفة', 800);
+        addStep('يصيغ إجابة شاملة <span class="thinking-wand">✦</span>', 1600);
+    } else {
+        loaderDiv.innerHTML = `
+            <div class="gemini-thinking-wrap">
+                <div class="gemini-orbs">
+                    <div class="g-orb g-orb-1"></div>
+                    <div class="g-orb g-orb-2"></div>
+                    <div class="g-orb g-orb-3"></div>
+                </div>
+                <div class="gemini-thinking-text">
+                    <div class="gemini-thinking-label">SA AI</div>
+                    <div class="gemini-thinking-dots">
+                        <div class="g-dot"></div>
+                        <div class="g-dot"></div>
+                        <div class="g-dot"></div>
+                    </div>
+                </div>
+            </div>`;
+    }
+    
     msgs.appendChild(loaderDiv); 
     msgs.scrollTop = msgs.scrollHeight;
     
     try {
         let finalPrompt = "";
         
+        // Auto-correct Arabic spelling before sending
+        const correctedTxt = txt;
+        
         if(selectedRole === 'student') {
-            finalPrompt += `أنت مساعد دراسي ذكي اسمه SA AI للطلاب. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة والتحيات تحتاج ردود قصيرة (جملة أو اثنتان)، الأسئلة التفسيرية تحتاج شرح متوسط، والأسئلة المعقدة تحتاج إجابة مفصلة. لا تطول إذا السؤال لا يحتاج لذلك. `;
+            finalPrompt += `أنت مساعد دراسي ذكي اسمه SA AI للطلاب. أجب باللغة العربية دائماً. 
+قواعد مهمة:
+- إذا كان السؤال يحتوي على أخطاء إملائية، افهم المقصود وأجب بشكل طبيعي
+- الأسئلة البسيطة والتحيات: رد قصير (جملة أو اثنتان)
+- الأسئلة التفسيرية: شرح متوسط مع أمثلة
+- الأسئلة المعقدة: إجابة مفصلة ومنظمة
+- استخدم ** للعناوين و- للنقاط عند الحاجة
+- لا تطول إذا السؤال لا يحتاج لذلك
+`;
         } else {
-            finalPrompt += `أنت مساعد معلمين ذكي اسمه SA AI. أجب باللغة العربية. حجم إجابتك يجب أن يتناسب مع السؤال: الأسئلة البسيطة ردود قصيرة، والأسئلة التفصيلية ردود شاملة. `;
+            finalPrompt += `أنت مساعد معلمين ذكي اسمه SA AI. أجب باللغة العربية دائماً.
+قواعد مهمة:
+- إذا كان السؤال يحتوي على أخطاء إملائية، افهم المقصود وأجب بشكل طبيعي
+- الأسئلة البسيطة: رد قصير ومباشر
+- الأسئلة التعليمية والتفصيلية: إجابة شاملة ومنظمة
+`;
         }
 
         if (ocrText) {
-            finalPrompt += `Context from image: "${ocrText}". `;
+            finalPrompt += `\nمحتوى الصورة المرفقة: "${ocrText}"\n`;
         }
-        finalPrompt += txt;
+        
+        // Add chat history context (last 4 exchanges)
+        if (currentChatMessages.length > 2) {
+            const recent = currentChatMessages.slice(-6);
+            finalPrompt += `\nسياق المحادثة السابقة:\n`;
+            recent.forEach(m => {
+                if (m.role === 'user') finalPrompt += `المستخدم: ${m.content}\n`;
+                else if (m.role === 'ai') finalPrompt += `SA AI: ${m.content?.substring(0, 200)}\n`;
+            });
+            finalPrompt += `\n`;
+        }
+        
+        finalPrompt += `السؤال الحالي: ${correctedTxt}`;
         
         const reply = await callPollinationsAI(finalPrompt);
         
@@ -2437,7 +2537,8 @@ window.sendAiMsg = async (prefix) => {
         renderMessageUI(prefix, 'ai', reply, null); 
         saveChatToLocal();
     } catch (e) { 
-        document.getElementById(loadId).innerText = "حدث خطأ في الاتصال بالذكاء الاصطناعي."; 
+        const el = document.getElementById(loadId);
+        if (el) el.innerHTML = '<div class="chat-msg ai" style="color:var(--danger);">حدث خطأ في الاتصال بالذكاء الاصطناعي.</div>';
         console.error(e);
     }
 };
@@ -2930,3 +3031,373 @@ if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('./service-worker.js');
     });
 }
+
+/* ============================================================
+   SA EDU v2.0 - VOICE CALL SYSTEM (P2P via PeerJS + Firebase)
+   ============================================================ */
+let _vcPeer = null;
+let _vcLocalStream = null;
+let _vcActiveCall = null;
+let _vcOtherName = '';
+let _vcOtherIcon = '';
+let _vcOtherUid = '';
+let _vcCallTimerInt = null;
+let _vcCallSeconds = 0;
+let _vcIsMuted = false;
+let _vcCallListenerOff = null;
+let _vcIncomingCall = null;
+
+const VC_PEER_CONFIG = {
+    debug: 0,
+    config: {
+        iceServers: [
+            { urls: "stun:stun.relay.metered.ca:80" },
+            { urls: "turn:global.relay.metered.ca:80", username: "14d6a892afc9dbe41c8e0de2", credential: "jWoQ1RL0jVlh/dNY" },
+            { urls: "turn:global.relay.metered.ca:443", username: "14d6a892afc9dbe41c8e0de2", credential: "jWoQ1RL0jVlh/dNY" }
+        ]
+    }
+};
+
+function vcInit() {
+    if (_vcPeer && !_vcPeer.destroyed) return;
+    _vcPeer = new Peer('sa_vc_' + myUid, VC_PEER_CONFIG);
+    
+    _vcPeer.on('call', (call) => {
+        const callerId = call.peer.replace('sa_vc_', '');
+        // Show incoming call UI
+        _vcIncomingCall = call;
+        // Get caller info from Firebase
+        get(ref(db, `users/students/${callerId}`)).then(snap => {
+            let callerData = snap.val();
+            if (!callerData) get(ref(db, `users/teachers/${callerId}`)).then(s2 => {
+                callerData = s2.val() || {};
+                _showIncomingCall(callerData.username || callerId, callerData.icon || 'fa-user', callerId);
+            });
+            else _showIncomingCall(callerData.username || callerId, callerData.icon || 'fa-user', callerId);
+        }).catch(() => _showIncomingCall(callerId, 'fa-user', callerId));
+    });
+    
+    _vcPeer.on('error', (err) => {
+        if (err.type !== 'peer-unavailable') showToast('خطأ في الاتصال', err.message || '', 'error', 3000);
+    });
+    
+    // Listen for incoming call signals on Firebase
+    if (_vcCallListenerOff) _vcCallListenerOff();
+    _vcCallListenerOff = onValue(ref(db, `vc_signals/${myUid}`), (snap) => {
+        if (!snap.exists()) return;
+        const sig = snap.val();
+        if (sig.type === 'ring' && sig.from !== myUid && !_vcActiveCall) {
+            // Show incoming call notification
+            _showIncomingCall(sig.callerName || sig.from, sig.callerIcon || 'fa-user', sig.from);
+        }
+    });
+}
+
+function _showIncomingCall(name, icon, uid) {
+    _vcOtherName = name;
+    _vcOtherIcon = icon;
+    _vcOtherUid = uid;
+    const toast = document.getElementById('incoming-call-toast');
+    document.getElementById('ict-caller-name').innerText = name;
+    document.getElementById('ict-caller-avatar').innerHTML = `<i class="fas ${icon}"></i>`;
+    toast.classList.add('show');
+    // Auto-decline after 30s
+    setTimeout(() => { if (toast.classList.contains('show')) vcDeclineCall(); }, 30000);
+}
+
+window.vcStartCall = async (otherName, otherIcon, otherUid, chatId) => {
+    if (_vcActiveCall) { showToast('مكالمة جارية بالفعل', '', 'info', 2000); return; }
+    
+    try {
+        _vcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch(e) {
+        showToast('لم يُسمح بالوصول للمايكروفون', '', 'error', 3000); return;
+    }
+    
+    vcInit();
+    
+    _vcOtherName = otherName;
+    _vcOtherIcon = otherIcon;
+    _vcOtherUid = otherUid;
+    
+    // Signal ring on Firebase
+    await set(ref(db, `vc_signals/${otherUid}`), {
+        type: 'ring',
+        from: myUid,
+        chatId,
+        callerName: currentUser,
+        callerIcon: localStorage.getItem('sa_icon') || 'fa-user',
+        ts: Date.now()
+    });
+    
+    // Open call UI
+    _vcOpenCallScreen(otherName, otherIcon, 'جاري الاتصال...', true);
+    
+    // Make PeerJS call
+    const call = _vcPeer.call('sa_vc_' + otherUid, _vcLocalStream);
+    _vcActiveCall = call;
+    
+    call.on('stream', (remoteStream) => {
+        _vcPlayRemote(remoteStream);
+        document.getElementById('vc-status').className = 'vc-status connected';
+        document.getElementById('vc-status').innerText = 'متصل';
+        document.getElementById('vc-timer').classList.remove('hidden');
+        _vcStartTimer();
+    });
+    
+    call.on('close', () => vcHangup());
+    call.on('error', () => vcHangup());
+    
+    // Timeout if no answer
+    setTimeout(() => {
+        if (_vcActiveCall && !document.getElementById('vc-timer').classList.contains('hidden') === false) {
+            showToast('لا يوجد رد', '', 'info', 2500);
+            vcHangup();
+        }
+    }, 35000);
+};
+
+window.vcAcceptCall = async () => {
+    document.getElementById('incoming-call-toast').classList.remove('show');
+    if (!_vcIncomingCall && !_vcOtherUid) return;
+    
+    try {
+        _vcLocalStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    } catch(e) {
+        showToast('لم يُسمح بالوصول للمايكروفون', '', 'error', 3000); return;
+    }
+    
+    vcInit();
+    
+    if (_vcIncomingCall) {
+        _vcIncomingCall.answer(_vcLocalStream);
+        _vcActiveCall = _vcIncomingCall;
+        _vcIncomingCall = null;
+        
+        _vcOpenCallScreen(_vcOtherName, _vcOtherIcon, 'جاري الاتصال...', false);
+        
+        _vcActiveCall.on('stream', (remoteStream) => {
+            _vcPlayRemote(remoteStream);
+            document.getElementById('vc-status').className = 'vc-status connected';
+            document.getElementById('vc-status').innerText = 'متصل';
+            document.getElementById('vc-timer').classList.remove('hidden');
+            _vcStartTimer();
+        });
+        _vcActiveCall.on('close', () => vcHangup());
+    } else {
+        // Accept via Firebase signal, make peer call
+        const call = _vcPeer.call('sa_vc_' + _vcOtherUid, _vcLocalStream);
+        _vcActiveCall = call;
+        _vcOpenCallScreen(_vcOtherName, _vcOtherIcon, 'جاري الاتصال...', false);
+        call.on('stream', (remoteStream) => {
+            _vcPlayRemote(remoteStream);
+            document.getElementById('vc-status').className = 'vc-status connected';
+            document.getElementById('vc-status').innerText = 'متصل';
+            document.getElementById('vc-timer').classList.remove('hidden');
+            _vcStartTimer();
+        });
+        call.on('close', () => vcHangup());
+    }
+    
+    // Clear signal
+    remove(ref(db, `vc_signals/${myUid}`)).catch(() => {});
+};
+
+window.vcDeclineCall = () => {
+    document.getElementById('incoming-call-toast').classList.remove('show');
+    _vcIncomingCall = null;
+    if (_vcOtherUid) remove(ref(db, `vc_signals/${_vcOtherUid}`)).catch(() => {});
+    showToast('تم رفض المكالمة', '', 'info', 2000);
+};
+
+function _vcOpenCallScreen(name, icon, statusText, isOutgoing) {
+    const screen = document.getElementById('voice-call-screen');
+    document.getElementById('vc-other-name').innerText = name;
+    document.getElementById('vc-other-avatar').innerHTML = `<i class="fas ${icon}"></i>`;
+    const status = document.getElementById('vc-status');
+    status.innerText = isOutgoing ? 'جاري الاتصال...' : 'جاري التوصيل...';
+    status.className = 'vc-status ringing';
+    document.getElementById('vc-timer').classList.add('hidden');
+    document.getElementById('vc-timer').innerText = '00:00';
+    _vcCallSeconds = 0;
+    screen.classList.add('open');
+}
+
+function _vcPlayRemote(stream) {
+    let audio = document.getElementById('vc-remote-audio');
+    if (!audio) {
+        audio = document.createElement('audio');
+        audio.id = 'vc-remote-audio';
+        audio.autoplay = true;
+        audio.playsInline = true;
+        document.body.appendChild(audio);
+    }
+    audio.srcObject = stream;
+    audio.play().catch(() => {});
+}
+
+function _vcStartTimer() {
+    clearInterval(_vcCallTimerInt);
+    _vcCallSeconds = 0;
+    _vcCallTimerInt = setInterval(() => {
+        _vcCallSeconds++;
+        const m = Math.floor(_vcCallSeconds / 60).toString().padStart(2, '0');
+        const s = (_vcCallSeconds % 60).toString().padStart(2, '0');
+        const el = document.getElementById('vc-timer');
+        if (el) el.innerText = `${m}:${s}`;
+    }, 1000);
+}
+
+window.vcHangup = () => {
+    clearInterval(_vcCallTimerInt);
+    if (_vcActiveCall) { try { _vcActiveCall.close(); } catch(e) {} _vcActiveCall = null; }
+    if (_vcLocalStream) { _vcLocalStream.getTracks().forEach(t => t.stop()); _vcLocalStream = null; }
+    const remAudio = document.getElementById('vc-remote-audio');
+    if (remAudio) remAudio.remove();
+    document.getElementById('voice-call-screen').classList.remove('open');
+    remove(ref(db, `vc_signals/${_vcOtherUid}`)).catch(() => {});
+    remove(ref(db, `vc_signals/${myUid}`)).catch(() => {});
+    if (_vcCallSeconds > 3) showToast('انتهت المكالمة', `مدة: ${Math.floor(_vcCallSeconds/60)}:${(_vcCallSeconds%60).toString().padStart(2,'0')}`, 'success', 3000);
+    _vcOtherUid = ''; _vcOtherName = ''; _vcIsMuted = false;
+};
+
+window.vcToggleMute = () => {
+    _vcIsMuted = !_vcIsMuted;
+    if (_vcLocalStream) _vcLocalStream.getAudioTracks().forEach(t => t.enabled = !_vcIsMuted);
+    const btn = document.getElementById('vc-mute-btn');
+    if (btn) {
+        btn.classList.toggle('active', _vcIsMuted);
+        btn.innerHTML = `<i class="fas fa-microphone${_vcIsMuted ? '-slash' : ''}"></i>`;
+    }
+};
+
+window.vcToggleSpeaker = () => {
+    const btn = document.getElementById('vc-speaker-btn');
+    if (btn) btn.classList.toggle('active');
+};
+
+/* ============================================================
+   SA EDU v2.0 - AVATAR IN EXAM CARDS & SECTION HEADERS
+   ============================================================ */
+
+function getMyAvatarHTML(size = 52) {
+    const icon = localStorage.getItem('sa_icon') || 'fa-user-astronaut';
+    const color = selectedRole === 'teacher' ? 'var(--accent-gold)' : 'var(--accent-primary)';
+    return `<div class="section-avatar-ring" style="width:${size}px;height:${size}px;font-size:${size*0.4}px;color:${color}">
+        <i class="fas ${icon}"></i>
+        <div class="section-avatar-online"></div>
+    </div>`;
+}
+
+function injectSectionAvatarHeader(sectionId, title, subtitle) {
+    const section = document.getElementById(sectionId);
+    if (!section) return;
+    // Remove existing if any
+    const existing = section.querySelector('.section-avatar-header');
+    if (existing) existing.remove();
+    
+    const icon = localStorage.getItem('sa_icon') || 'fa-user-astronaut';
+    const color = selectedRole === 'teacher' ? 'var(--accent-gold)' : 'var(--accent-primary)';
+    const level = selectedRole === 'student' ? (() => { const d = getXPData(); return getCurrentLevel(d.totalXP).name; })() : 'معلم';
+    
+    const header = document.createElement('div');
+    header.className = 'section-avatar-header';
+    header.innerHTML = `
+        <div class="section-avatar-wrap">
+            <div class="section-avatar-ring" style="color:${color}">
+                <i class="fas ${icon}" style="position:relative;z-index:1;font-size:1.6rem;"></i>
+            </div>
+            <div class="section-avatar-online"></div>
+        </div>
+        <div class="section-avatar-info">
+            <h4>${title}</h4>
+            <div class="level-tag"><i class="fas fa-star" style="font-size:0.6rem;"></i> ${level}</div>
+            <div style="margin-top:3px;"><span>${subtitle}</span></div>
+        </div>
+    `;
+    
+    // Insert after mobile-spacer
+    const spacer = section.querySelector('.mobile-spacer');
+    if (spacer) spacer.after(header);
+    else section.prepend(header);
+}
+
+// Override loginSuccess to inject avatars
+const _origLoginSuccess = loginSuccess;
+// We patch at the right place below
+
+// Patch initTeacherApp to inject avatar
+const _origInitTeacherApp = window.initTeacherApp || function(){};
+
+// Patch loadStudentExams to inject avatar header
+const _origLoadStudentExams = window.loadStudentExams;
+if (_origLoadStudentExams) {
+    window.loadStudentExams = function() {
+        _origLoadStudentExams.apply(this, arguments);
+        setTimeout(() => {
+            if (currentUser) injectSectionAvatarHeader('s-exams', 'مرحباً ' + currentUser.split(' ')[0], 'الاختبارات المتاحة');
+        }, 100);
+    };
+}
+
+// Inject avatar in AI sections when tab opens
+const _origSwitchTab = window.switchTab;
+window.switchTab = function(tabId, btn) {
+    _origSwitchTab.apply(this, arguments);
+    setTimeout(() => {
+        if (!currentUser) return;
+        const firstName = currentUser.split(' ')[0];
+        if (tabId === 's-exams') injectSectionAvatarHeader('s-exams', 'مرحباً ' + firstName, 'الاختبارات المتاحة');
+        if (tabId === 't-library') injectSectionAvatarHeader('t-library', 'مرحباً الأستاذ ' + firstName, 'اختباراتك المنشورة');
+        if (tabId === 's-reese' || tabId === 't-reese') {
+            const prefix = tabId.startsWith('s') ? 's' : 't';
+            injectSectionAvatarHeader(tabId.replace('-', '-'), 'Reese SA', 'شارك أفكارك');
+        }
+        if (tabId === 's-grades') injectSectionAvatarHeader('s-grades', 'درجاتك', 'نتائج اختباراتك');
+    }, 80);
+};
+
+// Inject voice call button in chat window when opened
+const _origOpenChatRoom = window.openChatRoom;
+window.openChatRoom = function(chatId, name, icon, uid) {
+    _origOpenChatRoom.apply(this, arguments);
+    // After chat opens, add call button
+    setTimeout(() => {
+        const header = document.querySelector('.chat-header .avatar-frame');
+        if (!header) return;
+        const existingCallBtn = document.querySelector('.chat-call-btn');
+        if (existingCallBtn) existingCallBtn.remove();
+        
+        const callBtn = document.createElement('button');
+        callBtn.className = 'chat-call-btn';
+        callBtn.title = 'مكالمة صوتية';
+        callBtn.innerHTML = '<i class="fas fa-phone"></i>';
+        callBtn.onclick = () => {
+            vcInit();
+            window.vcStartCall(name, icon, uid, chatId);
+        };
+        
+        // Insert before the "margin-right:auto" div
+        const actionsDiv = document.querySelector('.chat-header > div[style*="margin-right:auto"]');
+        if (actionsDiv) actionsDiv.prepend(callBtn);
+        else header.after(callBtn);
+    }, 200);
+};
+
+// Initialize voice call system after login
+const _origInitVoiceModuleCall = window.initVoiceModule || function(){};
+const _origLoginSuccessJS = loginSuccess;
+// Patch: re-init peer on login
+function patchVcOnLogin() {
+    setTimeout(() => {
+        if (myUid) vcInit();
+    }, 1000);
+}
+
+// Call vcInit when user logs in (hook into the onValue of user_chats init)
+document.addEventListener('DOMContentLoaded', () => {
+    if (myUid) setTimeout(vcInit, 500);
+});
+
+// Also init when page loads with saved user
+if (myUid) setTimeout(vcInit, 1500);
