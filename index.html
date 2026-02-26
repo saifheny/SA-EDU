@@ -2,7 +2,7 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>SA Educational Institution | منصة التعليم الذكي</title>
     <meta name="description" content="منصة SA EDU التعليمية الرائدة، النظام المتكامل لإدارة التعلم والاختبارات الإلكترونية المدعوم بالذكاء الاصطناعي. منصة شاملة للطلاب والمعلمين، اختبارات تفاعلية، تصحيح تلقائي، مساعد دراسي ذكي، وشبكة تواصل تعليمية. تغطية شاملة للمناهج الدراسية للمراحل الابتدائية، الإعدادية، والثانوية.">
     <meta name="keywords" content="تعليم, منصة تعليمية, اختبارات اونلاين, ذكاء اصطناعي في التعليم, SA EDU, SA Educational, نظام إدارة التعلم, LMS, امتحانات الكترونية, تصحيح تلقائي, بنك أسئلة, الثانوية العامة, المناهج المصرية, المناهج السعودية, تعليم الكتروني, مراجعات نهائية, فيزياء, كيمياء, رياضيات, أحياء, لغة عربية, لغة انجليزية, الصف الأول الثانوي, الصف الثاني الثانوي, الصف الثالث الثانوي, المرحلة الإعدادية, المرحلة الابتدائية, مساعد ذكي, حل واجبات, مدرس خصوصي, منصة ريس, دردشة تعليمية, تطبيق تعليمي, تعليم عن بعد, فصول افتراضية, نتائج الطلاب, متابعة ولي الأمر, الذكاء الاصطناعي, AI Education, EdTech, E-learning Platform, Online Exams">
@@ -28,8 +28,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js" defer></script>
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="unified-design.css">
-    <link rel="stylesheet" href="vibrant.css">
     <script src='https://unpkg.com/tesseract.js@v2.1.0/dist/tesseract.min.js'></script>
     <script type="application/ld+json">
     {
@@ -63,11 +61,6 @@
     </script>
 </head>
 <body>
-<script>
-function goToAuth(){var l=document.getElementById('landing-layer'),a=document.getElementById('auth-layer');if(l)l.classList.add('hidden');if(a)a.classList.remove('hidden');}
-function backToLanding(){var l=document.getElementById('landing-layer'),a=document.getElementById('auth-layer');if(a)a.classList.add('hidden');if(l)l.classList.remove('hidden');}
-function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=document.getElementById('btn-role-teacher');if(s)s.classList.toggle('active',r==='student');if(t)t.classList.toggle('active',r==='teacher');}
-</script>
     <audio id="snd-click" src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" preload="auto"></audio>
     <audio id="snd-sent" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" preload="auto"></audio>
     <audio id="snd-recv" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
@@ -140,6 +133,19 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         <div class="portal-container">
             <section id="t-library" class="app-section">
                 <div class="mobile-spacer"></div>
+                <!-- Hero Avatar - Teacher -->
+                <div class="section-avatar-hero" id="teacher-hero-section">
+                    <div class="hero-avatar-ring teacher-ring" id="teacher-hero-avatar"><i class="fas fa-user-tie"></i></div>
+                    <div class="hero-info">
+                        <div class="hero-greeting">أهلاً،</div>
+                        <div class="hero-name" id="teacher-hero-name">المعلم</div>
+                        <div class="hero-status"><span class="status-dot"></span> متصل الآن</div>
+                    </div>
+                    <div style="text-align:left;">
+                        <div style="font-size:0.7rem;color:#555;">اختباراتك</div>
+                        <div style="font-size:1.1rem;font-weight:800;color:var(--accent-gold);" id="teacher-exam-count">0</div>
+                    </div>
+                </div>
                 <div class="create-exam-cta" onclick="switchTab('t-create')">
                     <i class="fas fa-file-signature cta-bg-icon"></i>
                     <div class="cta-content">
@@ -151,16 +157,26 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                             <p style="margin: 4px 0 0; color: #ccc; font-size: 0.85rem;">انقر للبدء في إنشاء اختبار جديد للطلاب</p>
                         </div>
                     </div>
-                    <div style="color: #666; position:relative; z-index:2;"><i class="fas fa-chevron-right"></i></div>
+                    <div style="color: #666; position:relative; z-index:2;"><i class="fas fa-chevron-left"></i></div>
                 </div>
-                <div class="search-wrap">
-                    <i class="fas fa-search search-icon"></i>
-                    <input type="text" class="google-bar" id="t-search" placeholder="ابحث في اختباراتك...">
+                <div class="search-wrap-enhanced">
+                    <div class="search-glow"></div>
+                    <div class="search-inner" style="position:relative;">
+                        <i class="fas fa-search search-icon-animated"></i>
+                        <input type="text" class="google-bar" id="t-search" placeholder="ابحث في اختباراتك...">
+                    </div>
+                    <div class="search-categories">
+                        <div class="search-cat-chip" onclick="filterExamsBySubject('رياضيات')">📐 رياضيات</div>
+                        <div class="search-cat-chip" onclick="filterExamsBySubject('علوم')">🔬 علوم</div>
+                        <div class="search-cat-chip" onclick="filterExamsBySubject('عربي')">📖 عربي</div>
+                        <div class="search-cat-chip" onclick="filterExamsBySubject('إنجليزي')">🇬🇧 إنجليزي</div>
+                        <div class="search-cat-chip" onclick="filterExamsBySubject('تاريخ')">📜 تاريخ</div>
+                    </div>
                 </div>
                 <div id="t-tests-list"></div>
             </section>
 
-            <section id="t-reese" class="app-section full-width-section">
+            <section id="t-reese" class="app-section hidden full-width-section">
                 <div class="mobile-spacer"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 15px;">
                     <h2 style="margin:0; font-family:'Outfit', sans-serif;">Reese SA</h2>
@@ -178,7 +194,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="reese-feed-container-t" class="feed-container"></div>
             </section>
 
-            <section id="t-dardasha" class="app-section" style="padding: 0; max-width: 100%;">
+            <section id="t-dardasha" class="app-section hidden" style="padding: 0; max-width: 100%;">
                 <div class="chat-layout">
                     <div class="chat-sidebar" id="t-chat-sidebar">
                         <div class="chat-sidebar-header">
@@ -204,7 +220,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="t-results" class="app-section">
+            <section id="t-results" class="app-section hidden">
                 <div class="mobile-spacer"></div>
                 <div class="back-btn-header" onclick="switchTab('t-library')"><i class="fas fa-arrow-right"></i> الرئيسية</div>
                 <h2>نتائج الطلاب</h2>
@@ -212,7 +228,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="t-results-container"></div>
             </section>
 
-            <section id="t-create" class="app-section">
+            <section id="t-create" class="app-section hidden">
                 <div class="mobile-spacer"></div>
                 <div class="back-btn-header" onclick="resetCreateForm(); switchTab('t-library');"><i class="fas fa-arrow-right"></i> إلغاء</div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -241,7 +257,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     </select>
                     <input type="number" id="new-test-duration" class="smart-input" placeholder="المدة (د)" style="width: 100px; text-align: center;">
                 </div>
-                <select id="new-test-subject" class="smart-input" style="margin-top:0; border-color: rgba(255,255,255,0.1);" required onchange="checkCustomSubject(this)">
+                <select id="new-test-subject" class="smart-input" style="margin-top:0; border-color: rgba(255,255,255,0.1);" required>
                     <option value="" disabled selected>📚 اختر المادة (مطلوب) *</option>
                     <option value="رياضيات">📐 رياضيات</option>
                     <option value="فيزياء">⚡ فيزياء</option>
@@ -252,14 +268,11 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     <option value="تاريخ">🏛️ تاريخ</option>
                     <option value="جغرافيا">🗺️ جغرافيا</option>
                     <option value="علوم">🔬 علوم</option>
-                    <option value="علوم متكاملة">🧬 علوم متكاملة</option>
                     <option value="حاسب آلي">💻 حاسب آلي</option>
                     <option value="دراسات اجتماعية">📚 دراسات اجتماعية</option>
                     <option value="تربية دينية">🕌 تربية دينية</option>
                     <option value="أخرى">📝 أخرى</option>
-                    <option value="custom_subject" style="color: var(--accent-gold);">✏️ اكتب المادة بنفسك...</option>
                 </select>
-                <input type="text" id="custom-subject-input" class="smart-input hidden" placeholder="اكتب اسم المادة هنا..." style="border-color: var(--accent-gold); margin-top: 0;">
                 <input type="text" id="custom-grade-input" class="smart-input hidden" placeholder="اكتب اسم الصف هنا..." style="border-color: var(--accent-gold);">
                 <div id="q-editor-box" style="background: #151515; padding: 20px; border-radius: 20px; border: 1px solid #333; margin-top: 20px;">
                     <h3 style="font-size: 1rem; color: #888; margin-top: 0; margin-bottom: 15px;">إضافة سؤال</h3>
@@ -303,19 +316,15 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </button>
             </section>
 
-            <section id="t-ai" class="app-section">
+            <section id="t-ai" class="app-section hidden">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
-                        <div style="display:flex; gap:6px; align-items:center;">
+                        <div style="display:flex; gap:10px;">
                             <button class="ai-action-btn new-chat" onclick="startNewChat('t')" title="محادثة جديدة"><i class="fas fa-plus"></i></button>
-                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-clock-rotate-left"></i></button>
+                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-history"></i></button>
                             <button class="ai-action-btn incognito" id="t-incognito-btn" onclick="toggleIncognito('t')" title="محادثة مخفية"><i class="fas fa-user-secret"></i></button>
                         </div>
-                        <div class="ai-model-chip">
-                            <div class="ai-model-dot"></div>
-                            SA AI
-                        </div>
-                        <div style="display:flex; gap:6px;">
+                        <div style="display:flex; gap:10px;">
                             <button class="ai-action-btn" onclick="shareCurrentChat()" title="مشاركة المحادثة"><i class="fas fa-share-nodes"></i></button>
                         </div>
                     </div>
@@ -323,13 +332,13 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     
                     <div class="gemini-input-wrapper">
                         <div class="gemini-input-container">
-                            <label for="t-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-paperclip"></i></label>
+                            <label for="t-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-camera"></i></label>
                             <input type="file" id="t-ai-file" hidden accept="image/*" onchange="previewChatImg('t')">
                             
-                            <input type="text" id="t-ai-input" class="gemini-text-input" placeholder="أرسل رسالة لـ SA AI..." oninput="toggleAiSendMic('t', this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg('t');}">
+                            <input type="text" id="t-ai-input" class="gemini-text-input" placeholder="اكتب، تخيل، أنشئ..." oninput="toggleAiSendMic('t', this.value)">
                             
                             <button id="t-mic-btn" class="gemini-mic-btn" onclick="startVoiceInput('t')" title="إدخال صوتي"><i class="fas fa-microphone"></i></button>
-                            <button id="t-send-btn" onclick="sendAiMsg('t')" class="gemini-send-btn" style="display:none"><i class="fas fa-arrow-up"></i></button>
+                            <button id="t-send-btn" onclick="sendAiMsg('t')" class="gemini-send-btn" style="display:none"><i class="fas fa-paper-plane"></i></button>
                         </div>
                         <div id="t-chat-preview" class="chat-img-preview">
                             <i class="fas fa-times" onclick="clearChatImg('t')"></i>
@@ -338,10 +347,9 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     </div>
                 </div>
             </section>
-
-
         </div>
     </div>
+
     <div id="student-app" class="hidden">
         <nav class="top-nav">
             <div class="nav-container">
@@ -355,6 +363,19 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         <div class="portal-container">
             <section id="s-exams" class="app-section">
                 <div class="mobile-spacer"></div>
+                <!-- Hero Avatar - Student -->
+                <div class="section-avatar-hero" id="student-hero-section">
+                    <div class="hero-avatar-ring" id="student-hero-avatar"><i class="fas fa-user-astronaut"></i></div>
+                    <div class="hero-info">
+                        <div class="hero-greeting">مرحباً،</div>
+                        <div class="hero-name" id="student-hero-name">الطالب</div>
+                        <div class="hero-status"><span class="status-dot"></span> جاهز للتعلم</div>
+                    </div>
+                    <div style="text-align:left;">
+                        <div style="font-size:0.7rem;color:#555;">نقاطي</div>
+                        <div style="font-size:1.1rem;font-weight:800;color:var(--accent-primary);" id="student-hero-xp">0 XP</div>
+                    </div>
+                </div>
                 <div id="xp-hud" class="xp-hud">
                     <div class="xp-hud-top">
                         <div class="xp-level-badge" id="xp-level-badge">
@@ -378,9 +399,20 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     </div>
                     <div class="xp-badges-row" id="xp-badges-row"></div>
                 </div>
-                <div class="search-wrap">
-                    <i class="fas fa-search search-icon"></i>
-                    <input type="text" class="google-bar" id="s-search" placeholder="ابحث عن اختبار...">
+                <div class="search-wrap-enhanced">
+                    <div class="search-glow"></div>
+                    <div class="search-inner" style="position:relative;">
+                        <i class="fas fa-search search-icon-animated"></i>
+                        <input type="text" class="google-bar" id="s-search" placeholder="ابحث عن اختبار...">
+                    </div>
+                    <div class="search-categories">
+                        <div class="search-cat-chip" onclick="filterStudentExams('رياضيات')">📐 رياضيات</div>
+                        <div class="search-cat-chip" onclick="filterStudentExams('علوم')">🔬 علوم</div>
+                        <div class="search-cat-chip" onclick="filterStudentExams('عربي')">📖 عربي</div>
+                        <div class="search-cat-chip" onclick="filterStudentExams('إنجليزي')">🇬🇧 إنجليزي</div>
+                        <div class="search-cat-chip" onclick="filterStudentExams('فيزياء')">⚡ فيزياء</div>
+                        <div class="search-cat-chip" onclick="filterStudentExams('كيمياء')">🧪 كيمياء</div>
+                    </div>
                 </div>
                 <div class="create-exam-cta student-stats-cta" onclick="openStudentAnalytics()">
                     <i class="fas fa-chart-line cta-bg-icon"></i>
@@ -399,7 +431,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="s-exams-list"></div>
             </section>
 
-            <section id="s-analytics" class="app-section">
+            <section id="s-analytics" class="app-section hidden">
                 <div class="mobile-spacer"></div>
                 <div class="back-btn-header" onclick="switchTab('s-exams')"><i class="fas fa-arrow-right"></i> رجوع</div>
                 <h2 style="margin-bottom: 20px;">تحليل المستوى الدراسي</h2>
@@ -410,7 +442,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="s-reese" class="app-section full-width-section">
+            <section id="s-reese" class="app-section hidden full-width-section">
                 <div class="mobile-spacer"></div>
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding: 0 15px;">
                     <h2 style="margin:0; font-family:'Outfit', sans-serif;">Reese SA</h2>
@@ -428,7 +460,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="reese-feed-container-s" class="feed-container"></div>
             </section>
 
-            <section id="s-dardasha" class="app-section" style="padding: 0; max-width: 100%;">
+            <section id="s-dardasha" class="app-section hidden" style="padding: 0; max-width: 100%;">
                 <div class="chat-layout">
                     <div class="chat-sidebar" id="s-chat-sidebar">
                         <div class="chat-sidebar-header">
@@ -453,7 +485,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            <section id="s-grades" class="app-section">
+            <section id="s-grades" class="app-section hidden">
                 <div class="mobile-spacer"></div>
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                     <h2 style="margin:0;">لوحة الشرف (درجاتي)</h2>
@@ -464,19 +496,15 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <div id="s-grades-list"></div>
             </section>
 
-            <section id="s-ai" class="app-section">
+            <section id="s-ai" class="app-section hidden">
                 <div class="ai-layout">
                     <div class="ai-top-bar">
-                        <div style="display:flex; gap:6px; align-items:center;">
+                        <div style="display:flex; gap:10px;">
                             <button class="ai-action-btn new-chat" onclick="startNewChat('s')" title="محادثة جديدة"><i class="fas fa-plus"></i></button>
-                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-clock-rotate-left"></i></button>
+                            <button class="ai-action-btn history" onclick="toggleHistory(true)" title="السجل"><i class="fas fa-history"></i></button>
                             <button class="ai-action-btn incognito" id="s-incognito-btn" onclick="toggleIncognito('s')" title="محادثة مخفية"><i class="fas fa-user-secret"></i></button>
                         </div>
-                        <div class="ai-model-chip">
-                            <div class="ai-model-dot"></div>
-                            SA AI
-                        </div>
-                        <div style="display:flex; gap:6px;">
+                        <div style="display:flex; gap:10px;">
                             <button class="ai-action-btn" onclick="shareCurrentChat()" title="مشاركة المحادثة"><i class="fas fa-share-nodes"></i></button>
                         </div>
                     </div>
@@ -484,15 +512,15 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     
                     <div class="gemini-input-wrapper">
                         <div class="gemini-input-container">
-                            <label for="s-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-paperclip"></i></label>
+                            <label for="s-ai-file" class="gemini-img-btn" title="إرفاق صورة"><i class="fas fa-camera"></i></label>
                             <input type="file" id="s-ai-file" hidden accept="image/*" onchange="previewChatImg('s')">
                             
-                            <input type="text" id="s-ai-input" class="gemini-text-input" placeholder="أرسل رسالة لـ SA AI..." oninput="toggleAiSendMic('s', this.value)" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAiMsg('s');}">
+                            <input type="text" id="s-ai-input" class="gemini-text-input" placeholder="اسألني عن أي شيء..." oninput="toggleAiSendMic('s', this.value)">
                             
                             <button id="s-mic-btn" class="gemini-mic-btn" onclick="startVoiceInput('s')" title="إدخال صوتي"><i class="fas fa-microphone"></i></button>
-                            <button id="s-send-btn" onclick="sendAiMsg('s')" class="gemini-send-btn" style="display:none"><i class="fas fa-arrow-up"></i></button>
+                            <button id="s-send-btn" onclick="sendAiMsg('s')" class="gemini-send-btn" style="display:none"><i class="fas fa-paper-plane"></i></button>
                         </div>
-                        <div id="s-chat-preview" class="chat-img-preview">
+                         <div id="s-chat-preview" class="chat-img-preview">
                             <i class="fas fa-times" onclick="clearChatImg('s')"></i>
                             <img src="" id="s-chat-img-tag">
                         </div>
@@ -500,11 +528,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
 
-            </section>
-
-
-
-            <section id="s-taking-test" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
+            <section id="s-taking-test" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 800px; margin: auto;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                         <button class="back-btn-header" onclick="closeExam()"><i class="fas fa-sign-out-alt"></i> خروج</button>
@@ -515,27 +539,8 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                     <button onclick="submitExam()" class="modern-btn" style="background: var(--success); color: white; margin-bottom: 50px;">تسليم الإجابة</button>
                 </div>
             </section>
-
-            <section id="s-exam-result" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3100; padding: 20px; overflow-y: auto;">
-                <div style="max-width: 700px; margin: auto; padding-bottom: 60px;">
-                    <div class="exam-result-header">
-                        <div class="exam-result-avatar"><i class="fas fa-graduation-cap"></i></div>
-                        <div id="exam-result-score-circle" class="exam-result-score-circle">
-                            <span id="exam-result-pct">0%</span>
-                        </div>
-                        <h2 id="exam-result-title" style="color:#fff; margin:15px 0 5px; text-align:center;"></h2>
-                        <p id="exam-result-suggestion" style="color:#aaa; text-align:center; font-size:0.9rem;"></p>
-                    </div>
-                    <h3 style="color:#888; margin-top:30px; font-size:0.95rem;">الأسئلة التي تحتاج مراجعة:</h3>
-                    <div id="exam-result-wrong-list"></div>
-                    <div style="display:flex; gap:10px; margin-top:30px;">
-                        <button onclick="closeExamResult()" class="modern-btn secondary" style="flex:1;"><i class="fas fa-arrow-right"></i> رجوع</button>
-                        <button onclick="retryExamFromResult()" class="modern-btn" style="flex:1; background:var(--accent-primary);"><i class="fas fa-redo"></i> إعادة المحاولة</button>
-                    </div>
-                </div>
-            </section>
             
-            <section id="s-review-test" class="overlay-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
+            <section id="s-review-test" class="app-section hidden" style="position: fixed; inset: 0; background: #000; z-index: 3000; padding: 20px; overflow-y: auto;">
                 <div style="max-width: 800px; margin: auto;">
                     <div class="back-btn-header" onclick="document.getElementById('s-review-test').classList.add('hidden')"><i class="fas fa-arrow-right"></i> إغلاق المراجعة</div>
                     <h2 style="color: var(--accent-primary);">مراجعة الإجابات</h2>
@@ -543,7 +548,6 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 </div>
             </section>
         </div>
-    </div>
     </div>
 
     <div id="reese-compose-modal" class="compose-overlay">
@@ -753,13 +757,13 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         <div class="pwa-content">
             <img src="https://i.postimg.cc/BQQb5YDn/MOWU-DESIGN.png" alt="SA EDU App" class="pwa-icon">
             <div class="pwa-info">
-                <h4 style="margin:0; font-size:1rem; color:#fff;">SA EDU — تجربة أفضل</h4>
-                <p style="margin:2px 0 0; color:#aaa; font-size:0.78rem;">تثبيت التطبيق للوصول السريع بدون متصفح</p>
+                <h4>تثبيت SA EDU</h4>
+                <p>تجربة أفضل وأسرع</p>
             </div>
         </div>
         <div class="pwa-actions">
-            <button class="pwa-btn close" onclick="closePWA()"><i class="fas fa-times"></i></button>
-            <button class="pwa-btn install" onclick="installPWA()"><i class="fas fa-download"></i> تثبيت</button>
+            <button class="pwa-btn close" onclick="closePWA()">إغلاق</button>
+            <button class="pwa-btn install" onclick="installPWA()">تثبيت</button>
         </div>
     </div>
 
@@ -767,23 +771,48 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
 
     <div id="tab-dots" class="tab-dots hidden"></div>
 
-    <div id="exam-grading-overlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;">
-        <div class="construction-loader"></div>
-        <div style="color:#fff;font-size:1.2rem;font-weight:bold;">جاري تصحيح الامتحان...</div>
-        <div style="color:#aaa;font-size:0.9rem;">يتم تحليل الإجابات بالذكاء الاصطناعي</div>
-    </div>
-
-    <div id="profile-deeplink-modal" class="hidden">
-        <div class="bottom-sheet-content" style="background:#111; text-align:center; max-width:400px; margin:auto;">
-            <div class="avatar-frame" id="pdl-avatar" style="width:80px;height:80px;font-size:2.5rem;margin:0 auto 15px;"></div>
-            <h3 id="pdl-name" style="margin:0 0 5px;"></h3>
-            <span id="pdl-role" style="font-size:0.8rem;background:#333;padding:3px 12px;border-radius:15px;color:#aaa;"></span>
-            <div style="display:flex;gap:10px;margin-top:25px;">
-                <button onclick="document.getElementById('profile-deeplink-modal').classList.add('hidden')" class="modern-btn secondary" style="flex:1;">إلغاء</button>
-                <button id="pdl-chat-btn" class="modern-btn" style="flex:1;background:var(--accent-primary);">بدء الدردشة <i class="fas fa-comment"></i></button>
-            </div>
+    <!-- ============ DIRECT VOICE CALL OVERLAY ============ -->
+    <div id="direct-call-overlay">
+        <div class="call-avatar-ring" id="call-overlay-avatar">
+            <i class="fas fa-user-graduate"></i>
+        </div>
+        <div class="call-name-text" id="call-overlay-name">...</div>
+        <div class="call-status-text" id="call-overlay-status">مكالمة واردة...</div>
+        <div class="call-duration-timer" id="call-duration-timer">0:00</div>
+        <div class="call-mute-row" id="call-mute-row" style="display:none">
+            <button class="call-mute-btn" id="call-mute-btn" onclick="toggleCallMute()">
+                <i class="ph-bold ph-microphone"></i>
+            </button>
+            <button class="call-mute-btn" id="call-speaker-btn" onclick="toggleCallSpeaker()">
+                <i class="ph-bold ph-speaker-high"></i>
+            </button>
+        </div>
+        <div class="call-actions">
+            <button class="call-action-btn accept" id="call-accept-btn" onclick="acceptDirectCall()">
+                <i class="ph-bold ph-phone"></i>
+            </button>
+            <button class="call-action-btn reject" onclick="rejectOrEndDirectCall()">
+                <i class="ph-bold ph-phone-disconnect"></i>
+            </button>
         </div>
     </div>
+
+    <!-- ============ INCOMING CALL TOAST ============ -->
+    <div class="call-toast" id="call-toast-banner">
+        <div class="call-toast-avatar" id="call-toast-avatar"><i class="fas fa-user"></i></div>
+        <div class="call-toast-info">
+            <div class="call-toast-name" id="call-toast-name">...</div>
+            <div class="call-toast-sub">مكالمة صوتية واردة...</div>
+        </div>
+        <div class="call-toast-btns">
+            <button class="call-toast-btn rej" onclick="rejectOrEndDirectCall()"><i class="ph-bold ph-phone-disconnect"></i></button>
+            <button class="call-toast-btn ans" onclick="acceptDirectCall()"><i class="ph-bold ph-phone"></i></button>
+        </div>
+    </div>
+
+    <!-- Remote audio for direct calls -->
+    <audio id="direct-call-remote-audio" autoplay></audio>
+    <!-- ============ END DIRECT VOICE CALL ============ -->
 
     <script>
     function toggleAiSendMic(role, value) {
@@ -854,8 +883,10 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
     }
     </script>
 
+    <!-- ============ VOICE ROOMS SYSTEM ============ -->
     <div id="voice-audio-container" style="display:none;"></div>
 
+    <!-- Voice Rooms List Panel -->
     <div class="vr-panel-backdrop" onclick="closeVoiceRooms()"></div>
     <div id="voice-rooms-panel" class="vr-panel">
         <div class="vr-panel-handle"></div>
@@ -881,6 +912,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         </div>
     </div>
 
+    <!-- Audio Permission Gate -->
     <div id="voice-audio-gate" class="vr-gate">
         <div class="vr-gate-card">
             <button class="vr-gate-close" onclick="closeVoiceGate()"><i class="ph-bold ph-x"></i></button>
@@ -897,6 +929,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
         </div>
     </div>
 
+    <!-- Active Voice Room Full Screen -->
     <div id="voice-room-screen" class="vr-room-screen">
         <div class="vr-room-bg"></div>
 
@@ -913,6 +946,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
 
         <div id="voice-users-grid" class="vr-users-grid"></div>
 
+        <!-- Filters popup -->
         <div id="vr-filter-menu" class="vr-filter-menu">
             <div class="vr-filter-opt active" onclick="voiceApplyFilter('none', this)"><i class="ph-bold ph-wave-sawtooth"></i><span>عادي</span></div>
             <div class="vr-filter-opt" onclick="voiceApplyFilter('deep', this)"><i class="ph-bold ph-equalizer"></i><span>عميق</span></div>
@@ -920,6 +954,7 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
             <div class="vr-filter-opt" onclick="voiceApplyFilter('robot', this)"><i class="ph-bold ph-robot"></i><span>روبوت</span></div>
         </div>
 
+        <!-- Dock -->
         <div class="vr-dock-wrap">
             <div class="vr-dock">
                 <button id="vr-mic-btn" class="vr-dock-btn active" onclick="voiceToggleMic()" title="كتم/تشغيل">
@@ -928,16 +963,14 @@ function setAuthRole(r){var s=document.getElementById('btn-role-student'),t=docu
                 <button class="vr-dock-btn" onclick="voiceToggleFilters()" title="فلاتر الصوت">
                     <i class="ph-bold ph-sliders-horizontal"></i>
                 </button>
-                <button class="vr-dock-btn minimize-btn" onclick="minimizeVoiceRoom()" title="تصغير">
-                    <i class="ph-bold ph-arrows-in"></i>
-                </button>
                 <button class="vr-dock-btn danger" onclick="voiceExitRoom()" title="مغادرة">
                     <i class="ph-bold ph-phone-disconnect"></i>
                 </button>
             </div>
         </div>
     </div>
-    
+    <!-- ============ END VOICE ROOMS ============ -->
+
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script type="module" src="script.js"></script>
 </body>
