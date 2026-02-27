@@ -352,9 +352,15 @@
                             <i class="fas fa-bolt" style="color:var(--accent-gold);"></i> <span id="xp-total-count">0</span> XP
                         </div>
                     </div>
-                    <!-- daily goal removed -->
-                    <span id="xp-daily-label" style="display:none"></span>
-                    <div id="xp-daily-fill" style="display:none"></div>
+                    <div class="xp-daily-goal-wrap">
+                        <div class="xp-daily-goal-label">
+                            <span>هدف اليوم</span>
+                            <span id="xp-daily-label">0 / 50 XP</span>
+                        </div>
+                        <div class="xp-daily-bar">
+                            <div class="xp-daily-fill" id="xp-daily-fill" style="width:0%"></div>
+                        </div>
+                    </div>
                     <div class="xp-badges-row" id="xp-badges-row"></div>
                 </div>
                 <div class="search-wrap">
@@ -716,43 +722,7 @@
 
     <div id="sa-toast-container"></div>
 
-    <!-- tab-dots removed - swipe navigation active -->
-
-    <!-- ============ VOICE CALL SYSTEM ============ -->
-    <div id="voice-call-screen">
-        <div class="vc-bg-glow"></div>
-        <div class="vc-avatar-ring">
-            <div class="vc-avatar-inner" id="vc-other-avatar"><i class="fas fa-user"></i></div>
-        </div>
-        <div class="vc-name" id="vc-other-name">...</div>
-        <div class="vc-status ringing" id="vc-status">جاري الاتصال...</div>
-        <div class="vc-timer hidden" id="vc-timer">00:00</div>
-        <div class="vc-dock">
-            <button class="vc-dock-btn mute" id="vc-mute-btn" onclick="vcToggleMute()" title="كتم">
-                <i class="fas fa-microphone"></i>
-            </button>
-            <button class="vc-dock-btn hangup" onclick="vcHangup()" title="إنهاء">
-                <i class="fas fa-phone-slash"></i>
-            </button>
-            <button class="vc-dock-btn speaker" id="vc-speaker-btn" onclick="vcToggleSpeaker()" title="مكبر صوت">
-                <i class="fas fa-volume-up"></i>
-            </button>
-        </div>
-    </div>
-
-    <!-- Incoming call toast -->
-    <div id="incoming-call-toast" class="incoming-call-toast">
-        <div class="ict-avatar" id="ict-caller-avatar"><i class="fas fa-user"></i></div>
-        <div class="ict-info">
-            <div class="ict-name" id="ict-caller-name">مكالمة واردة</div>
-            <div class="ict-sub">مكالمة صوتية...</div>
-        </div>
-        <div class="ict-actions">
-            <button class="ict-btn decline" onclick="vcDeclineCall()" title="رفض"><i class="fas fa-phone-slash"></i></button>
-            <button class="ict-btn accept" onclick="vcAcceptCall()" title="قبول"><i class="fas fa-phone"></i></button>
-        </div>
-    </div>
-    <!-- ============ END VOICE CALL ============ -->
+    <div id="tab-dots" class="tab-dots hidden"></div>
 
     <script>
     function toggleAiSendMic(role, value) {
