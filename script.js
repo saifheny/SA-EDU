@@ -174,7 +174,65 @@ function hideTabDots() {
     if (dotsContainer) dotsContainer.classList.add('hidden');
 }
 
+// ── Collapsible Search ────────────────────────────────────────────────────────
+window.toggleSearch = (wrapperId) => {
+    const wrap = document.getElementById(wrapperId);
+    if (!wrap) return;
+    const isExpanding = !wrap.classList.contains('expanded');
+    wrap.classList.toggle('expanded', isExpanding);
+    if (isExpanding) {
+        const input = wrap.querySelector('.search-expand-input');
+        if (input) setTimeout(() => input.focus(), 380);
+    }
+};
+
+window.closeSearch = (wrapperId) => {
+    const wrap = document.getElementById(wrapperId);
+    if (!wrap) return;
+    wrap.classList.remove('expanded');
+    const input = wrap.querySelector('.search-expand-input');
+    if (input) {
+        input.value = '';
+        input.dispatchEvent(new Event('input'));
+    }
+};
+
+// Debounce helper
+function _debounce(fn, ms) {
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+const _filterTeacherTests = _debounce((term) => {
+    const q = term.trim().toLowerCase();
+    document.querySelectorAll('#t-tests-list .card-wrapper').forEach(card => {
+        const title = (card.querySelector('.card-title')?.textContent || '').toLowerCase();
+        card.style.display = (!q || title.includes(q)) ? '' : 'none';
+    });
+}, 260);
+
+const _filterStudentExams = _debounce((term) => {
+    const q = term.trim().toLowerCase();
+    document.querySelectorAll('#s-exams-list .card-wrapper').forEach(card => {
+        const title = (card.querySelector('.card-title')?.textContent || '').toLowerCase();
+        card.style.display = (!q || title.includes(q)) ? '' : 'none';
+    });
+}, 260);
+
+window.debounceSearch = (role, value) => {
+    if (role === 'teacher') _filterTeacherTests(value);
+    else if (role === 'student') _filterStudentExams(value);
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 window.addEventListener('click', function(e) {
+    // Close any open collapsible search when clicking outside
+    document.querySelectorAll('.search-collapsible.expanded').forEach(wrap => {
+        if (!wrap.contains(e.target)) {
+            wrap.classList.remove('expanded');
+        }
+    });
+
     const searchModal = document.getElementById('user-search-modal');
     const profileModal = document.getElementById('profile-info-modal');
     const teacherDetailModal = document.getElementById('teacher-detail-modal');
